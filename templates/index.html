@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lease Reminder</title>
+    <!-- PDF.js library for rendering PDFs in modal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <style>
         /* Base styles */
         * {
@@ -1182,6 +1187,27 @@
             resize: vertical;
             box-sizing: border-box;
         }
+        /* PDF Modal Specific Styles */
+        .pdf-modal {
+            max-width: 1200px;
+            width: 95%;
+        }
+        .pdf-modal-body {
+            padding: 0;
+            height: 80vh;
+            overflow-y: auto;
+        }
+        #pdfViewer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+        }
+        #pdfViewer canvas {
+            max-width: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
         .btn-view-text {
             background: #e0f2fe;
             border: 1px solid #7dd3fc;
@@ -1984,9 +2010,12 @@
         <div class="view-actions">
             <a href="/?lease_id={{ lease_data.id }}&edit=true" class="btn-edit">Edit Lease</a>
             <a href="/?new=true&renew_from={{ lease_data.id }}" class="btn-renew">Add Renewal Lease</a>
-            {% if lease_data.source_document and lease_data.source_document.extracted_text %}
             <button type="button" class="btn-view-text" onclick="openTextModal()">
                 View Extracted Text
+            </button>
+            {% if lease_data.source_document and lease_data.source_document.filename and lease_data.source_document.filename.lower().endswith('.pdf') %}
+            <button type="button" class="btn-view-text" onclick="openPdfModal()">
+                View Original PDF
             </button>
             {% endif %}
             <button type="button" class="btn-reset delete-trigger"
@@ -2693,6 +2722,19 @@ document.getElementById('deleteModalForm').addEventListener('submit', function(e
     </div>
 </div>
 
+<!-- PDF VIEWER MODAL -->
+<div class="text-modal-overlay" id="pdfModal">
+    <div class="text-modal pdf-modal">
+        <div class="text-modal-header">
+            <h3>Original Lease PDF</h3>
+            <button type="button" class="text-modal-close" onclick="closePdfModal()">Close</button>
+        </div>
+        <div class="text-modal-body pdf-modal-body">
+            <div id="pdfViewer"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 function openTextModal() {
     const modal = document.getElementById('textModal');
@@ -2719,6 +2761,89 @@ document.addEventListener('keydown', function(e) {
         const textModal = document.getElementById('textModal');
         if (textModal && textModal.classList.contains('visible')) {
             closeTextModal();
+        }
+    }
+});
+
+// PDF MODAL FUNCTIONS
+function openPdfModal() {
+    const modal = document.getElementById('pdfModal');
+    const viewer = document.getElementById('pdfViewer');
+
+    // Clear any previous content
+    viewer.innerHTML = '';
+
+    // Get PDF URL from data attribute or construct it
+    const filename = '{{ lease_data.source_document.filename if lease_data and lease_data.source_document and lease_data.source_document.filename else "" }}';
+    if (!filename) {
+        viewer.innerHTML = '<p>No PDF available.</p>';
+        modal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+        return;
+    }
+
+    const pdfUrl = '/view_pdf/' + filename;
+
+    // Show modal
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+
+    // Load and render PDF
+    pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+        const containerWidth = viewer.clientWidth;
+
+        // Render each page
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            pdf.getPage(pageNum).then(function(page) {
+                // Calculate scale to fit container width
+                const viewport = page.getViewport({ scale: 1 });
+                const scale = containerWidth / viewport.width;
+                const scaledViewport = page.getViewport({ scale: scale });
+
+                // Create canvas for this page
+                const canvas = document.createElement('canvas');
+                canvas.className = 'pdf-page';
+                canvas.width = scaledViewport.width;
+                canvas.height = scaledViewport.height;
+                viewer.appendChild(canvas);
+
+                // Render page to canvas
+                const context = canvas.getContext('2d');
+                page.render({
+                    canvasContext: context,
+                    viewport: scaledViewport
+                });
+            });
+        }
+    }).catch(function(error) {
+        viewer.innerHTML = '<p>Error loading PDF: ' + error.message + '</p>';
+    });
+}
+
+function closePdfModal() {
+    const modal = document.getElementById('pdfModal');
+    const viewer = document.getElementById('pdfViewer');
+
+    // Clear rendered pages
+    viewer.innerHTML = '';
+
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+// Close PDF modal when clicking outside
+document.getElementById('pdfModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closePdfModal();
+    }
+});
+
+// Close PDF modal with Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const pdfModal = document.getElementById('pdfModal');
+        if (pdfModal && pdfModal.classList.contains('visible')) {
+            closePdfModal();
         }
     }
 });
