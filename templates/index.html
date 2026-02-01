@@ -1994,6 +1994,47 @@
             </div>
         </div>
 
+        <!-- SECTION D: Lease Terms -->
+        <div class="details-group">
+            <h4 class="details-group-header">Lease Terms</h4>
+            <div class="field-row">
+                <span class="field-label">Lock-in Period</span>
+                <span class="field-value">{% if cv.lock_in_period and cv.lock_in_period.duration_months is not none %}{{ cv.lock_in_period.duration_months }} months{% else %}Not specified{% endif %}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Rent Escalation on Renewal</span>
+                <span class="field-value">{% if cv.renewal_terms and cv.renewal_terms.rent_escalation_percent is not none %}{{ cv.renewal_terms.rent_escalation_percent }}%{% else %}Not specified{% endif %}</span>
+            </div>
+        </div>
+
+        <!-- SECTION E: Changes from Previous Version (only for renewals) -->
+        {% if version_changes and version_changes|length > 0 %}
+        <button type="button" class="btn-toggle-changes" onclick="toggleVersionChanges()">
+            View changes from previous version ({{ version_changes|length }})
+        </button>
+        <div class="details-group version-changes" id="versionChangesSection" style="display: none;">
+            <h4 class="details-group-header">Changes from Previous Version</h4>
+            {% for change in version_changes %}
+            <div class="field-row change-{{ change.change_type }}">
+                <span class="field-label">{{ change.label }}</span>
+                <span class="field-value">
+                    {% if change.change_type == 'added' %}
+                        <span class="change-added">{{ change.new_value }}</span>
+                        <span class="change-note">(new)</span>
+                    {% elif change.change_type == 'removed' %}
+                        <span class="change-removed">{{ change.old_value or '—' }}</span>
+                        <span class="change-note">(removed)</span>
+                    {% else %}
+                        <span class="change-old">{{ change.old_value or '—' }}</span>
+                        <span class="change-arrow">→</span>
+                        <span class="change-new">{{ change.new_value or '—' }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <!-- Metadata -->
         {% set source_doc = lease_data.source_document if lease_data.source_document else {} %}
         <div class="details-meta">
@@ -2094,7 +2135,7 @@
             {% endif %}
         </div>
 
-        <form action="{{ url_for('save_lease') }}" method="post">
+        <form action="{{ url_for('save_lease') }}" method="post" data-version-changes='{{ version_changes | tojson | e }}' data-lease-version="{{ lease_data.version or 1 }}">
             <input type="hidden" name="lease_id" value="{{ lease_data.id }}">
 
             <div class="form-group">
@@ -2133,6 +2174,14 @@
                     <label for="security_deposit">Security Deposit</label>
                     <input type="number" id="security_deposit" name="security_deposit" placeholder="0" min="0" value="{{ cv.security_deposit or '' }}">
                 </div>
+                <div class="form-group">
+                    <label for="lock_in_months">Lock-in Period (months)</label>
+                    <input type="number" id="lock_in_months" name="lock_in_months" placeholder="0" min="0" value="{{ (cv.lock_in_period.duration_months if cv.lock_in_period else '') or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="rent_escalation_percent">Rent Escalation on Renewal (%)</label>
+                    <input type="number" id="rent_escalation_percent" name="rent_escalation_percent" placeholder="0" min="0" step="0.1" value="{{ (cv.renewal_terms.rent_escalation_percent if cv.renewal_terms else '') or '' }}">
+                </div>
             </div>
 
             <div class="form-group" style="max-width: 200px;">
@@ -2146,6 +2195,7 @@
                 <a href="/" class="btn-cancel">Cancel</a>
             </div>
             <div class="ai-message"></div>
+            <div class="unified-changes-container" id="unifiedChanges"></div>
         </form>
     </div>
 
@@ -2245,6 +2295,14 @@
                     <label for="security_deposit">Security Deposit</label>
                     <input type="number" id="security_deposit" name="security_deposit" placeholder="0" min="0">
                 </div>
+                <div class="form-group">
+                    <label for="lock_in_months">Lock-in Period (months)</label>
+                    <input type="number" id="lock_in_months" name="lock_in_months" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rent_escalation_percent">Rent Escalation on Renewal (%)</label>
+                    <input type="number" id="rent_escalation_percent" name="rent_escalation_percent" placeholder="0" min="0" step="0.1">
+                </div>
             </div>
 
             <div class="form-group" style="max-width: 200px;">
@@ -2287,7 +2345,9 @@ const FIELD_LABELS = {
     'lease_end_date': 'End Date',
     'monthly_rent': 'Monthly Rent',
     'security_deposit': 'Security Deposit',
-    'rent_due_day': 'Rent Due Day'
+    'rent_due_day': 'Rent Due Day',
+    'lock_in_months': 'Lock-in Period (months)',
+    'rent_escalation_percent': 'Rent Escalation on Renewal (%)'
 };
 
 // List of all lease fields
@@ -2382,10 +2442,15 @@ function aiPrefill(button) {
             const overwrites = [];     // Fields that had prior values replaced
             const unchanged = [];      // Fields where AI value matched existing
 
+            // Initialize unified changes from version changes (for renewal leases)
+            unifiedChangesMap = initUnifiedChanges(form);
+
             // Helper to safely extract value from AI response field
+            // Returns null if value is missing, null, undefined, or empty string
             const getValue = (field) => {
                 if (field && typeof field === 'object' && field.value !== null && field.value !== undefined) {
-                    return String(field.value);
+                    const strVal = String(field.value).trim();
+                    return strVal === '' ? null : strVal;
                 }
                 return null;
             };
@@ -2419,7 +2484,7 @@ function aiPrefill(button) {
                 if (normalizedOld === normalizedNew) {
                     unchanged.push({
                         fieldName: fieldName,
-                        label: FIELD_LABELS[fieldName]
+                        label: FIELD_LABELS[fieldName] || fieldName
                     });
                     return false;
                 }
@@ -2433,10 +2498,10 @@ function aiPrefill(button) {
                 field.dataset.overwriteSource = 'ai';
                 field.dataset.overwrittenAt = new Date().toISOString();
 
-                // Track this update
+                // Track this update (use fieldName as fallback if label missing)
                 updates.push({
                     fieldName: fieldName,
-                    label: FIELD_LABELS[fieldName],
+                    label: FIELD_LABELS[fieldName] || fieldName,
                     oldValue: oldValue,
                     newValue: newValue
                 });
@@ -2445,7 +2510,7 @@ function aiPrefill(button) {
                 if (normalizedOld !== '') {
                     overwrites.push({
                         fieldName: fieldName,
-                        label: FIELD_LABELS[fieldName],
+                        label: FIELD_LABELS[fieldName] || fieldName,
                         oldValue: oldValue,
                         newValue: newValue
                     });
@@ -2470,6 +2535,8 @@ function aiPrefill(button) {
             updateField('monthly_rent', getValue(d.monthly_rent));
             updateField('security_deposit', getValue(d.security_deposit));
             updateField('rent_due_day', getValue(d.rent_due_day));
+            updateField('lock_in_months', getValue(d.lock_in_duration_months));
+            updateField('rent_escalation_percent', getValue(d.rent_escalation_percent));
 
             // Build summary message
             let html = '';
@@ -2485,24 +2552,34 @@ function aiPrefill(button) {
                 html += `</div>`;
             }
 
-            if (overwrites.length > 0) {
-                html += `<div class="ai-overwrite-warning">`;
-                html += `<strong>Previous values replaced:</strong>`;
-                html += `<ul class="ai-overwrite-list">`;
-                overwrites.forEach(o => {
-                    const oldDisplay = o.oldValue || '(empty)';
-                    const newDisplay = o.newValue || '(empty)';
-                    html += `<li><span class="field-name">${o.label}:</span> `;
-                    html += `<span class="old-value">${escapeHtml(oldDisplay)}</span>`;
-                    html += ` <span class="arrow">→</span> `;
-                    html += `<span class="new-value">${escapeHtml(newDisplay)}</span></li>`;
-                });
-                html += `</ul>`;
-                html += `</div>`;
-            }
+            // Merge ALL AI updates into unified changes map (keyed by field name)
+            // This includes both overwrites AND populated fields (empty → value)
+            updates.forEach(u => {
+                const existingChange = unifiedChangesMap[u.fieldName];
+                if (existingChange) {
+                    // Field already in map from version changes
+                    // Preserve original oldValue, update newValue, mark as AI
+                    existingChange.newValue = u.newValue;
+                    existingChange.source = 'ai';
+                } else {
+                    // New field not in version changes — add it
+                    unifiedChangesMap[u.fieldName] = {
+                        field: u.fieldName,
+                        label: u.label,
+                        oldValue: u.oldValue,
+                        newValue: u.newValue,
+                        changeType: u.oldValue ? 'changed' : 'added',
+                        source: 'ai'
+                    };
+                }
+            });
+
+            // Render unified changes (includes both version and AI changes)
+            const unifiedContainer = form.parentElement.querySelector('#unifiedChanges');
+            renderUnifiedChanges(unifiedChangesMap, unifiedContainer);
 
             if (updates.length === 0) {
-                html = 'AI ran but no differences were found. All fields already match AI suggestions.';
+                html = 'AI analysis complete. No new values were found in the document, or all fields already match.';
             }
 
             messageDiv.className = 'ai-message success visible';
@@ -2523,6 +2600,91 @@ function aiPrefill(button) {
         messageDiv.textContent = 'Unable to connect to AI service. Please fill in the fields manually.';
     });
 }
+
+// Toggle version changes visibility in View Mode
+function toggleVersionChanges() {
+    const section = document.getElementById('versionChangesSection');
+    const button = document.querySelector('.btn-toggle-changes');
+    if (section) {
+        if (section.style.display === 'none') {
+            section.style.display = 'block';
+            if (button) button.textContent = button.textContent.replace('View', 'Hide');
+        } else {
+            section.style.display = 'none';
+            if (button) button.textContent = button.textContent.replace('Hide', 'View');
+        }
+    }
+}
+
+// Initialize unified changes display in Edit Mode
+function initUnifiedChanges(form) {
+    const versionChangesJson = form.dataset.versionChanges;
+    const leaseVersion = parseInt(form.dataset.leaseVersion) || 1;
+
+    // Only for renewal leases (version > 1)
+    if (leaseVersion <= 1 || !versionChangesJson) return {};
+
+    try {
+        const versionChanges = JSON.parse(versionChangesJson);
+        const changesMap = {};
+
+        // Initialize with version changes
+        versionChanges.forEach(change => {
+            changesMap[change.field] = {
+                field: change.field,
+                label: change.label,
+                oldValue: change.old_value,
+                newValue: change.new_value,
+                changeType: change.change_type,
+                source: 'version' // Tagged as version change
+            };
+        });
+
+        return changesMap;
+    } catch (e) {
+        console.error('Failed to parse version changes:', e);
+        return {};
+    }
+}
+
+// Render unified changes display
+function renderUnifiedChanges(changesMap, container) {
+    if (!container) return;
+
+    const changes = Object.values(changesMap);
+    if (changes.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    let html = '<div class="unified-changes">';
+    html += '<h4>Previous values replaced</h4>';
+    html += '<ul class="changes-list">';
+
+    changes.forEach(c => {
+        const oldDisplay = c.oldValue || '(empty)';
+        const newDisplay = c.newValue || '(empty)';
+        const sourceTag = c.source === 'ai' ? 'Updated by AI' : 'Changed from previous version';
+        const sourceClass = c.source === 'ai' ? 'source-ai' : 'source-version';
+
+        html += `<li>`;
+        html += `<span class="field-name">${escapeHtml(c.label)}:</span> `;
+        html += `<span class="old-value">${escapeHtml(String(oldDisplay))}</span>`;
+        html += ` <span class="arrow">→</span> `;
+        html += `<span class="new-value">${escapeHtml(String(newDisplay))}</span>`;
+        html += ` <span class="source-tag ${sourceClass}">${sourceTag}</span>`;
+        html += `</li>`;
+    });
+
+    html += '</ul></div>';
+    container.innerHTML = html;
+}
+
+// Global map for unified changes (keyed by field name)
+let unifiedChangesMap = {};
 </script>
 </div>
 

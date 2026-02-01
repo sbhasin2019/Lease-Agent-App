@@ -219,6 +219,19 @@ IMPORTANT RULES:
 - The "page" field should be null unless you can determine it from context
 - For rent_due_day: extract the day of month (1-31) when rent is due. Look for phrases like "due on the 1st", "payable by the 15th", "on or before the first day", etc.
 
+LOCK-IN PERIOD RULES:
+- Extract the lock-in period as a number of MONTHS only
+- Look for phrases like "lock-in period", "minimum term", "cannot terminate before", "committed for"
+- Convert years to months if needed (e.g., "1 year lock-in" = 12)
+- If not explicitly mentioned, use null — do NOT infer or guess
+
+RENT ESCALATION RULES:
+- Extract the rent escalation percentage ONLY if explicitly stated
+- Look for phrases like "rent shall increase by X%", "escalation of X%", "annual increment of X%", "X% increase upon renewal"
+- Extract ONLY the percentage number (e.g., 5 for "5%")
+- This is informational only — do NOT calculate or apply it
+- If not explicitly mentioned, use null — do NOT infer or guess
+
 LEASE NICKNAME RULES:
 - Generate a short, human-friendly nickname (2-6 words)
 - Prefer format: "[Location/Building] – [Type] [Unit#]" when unit number is available
@@ -240,6 +253,8 @@ Return ONLY valid JSON matching this exact schema (no other text):
   "monthly_rent": {{ "value": null, "page": null, "evidence": null }},
   "rent_due_day": {{ "value": null, "page": null, "evidence": null }},
   "security_deposit": {{ "value": null, "page": null, "evidence": null }},
+  "lock_in_duration_months": {{ "value": null, "page": null, "evidence": null }},
+  "rent_escalation_percent": {{ "value": null, "page": null, "evidence": null }},
   "confidence_notes": null
 }}
 
@@ -344,6 +359,9 @@ def _load_all_leases():
             # Migrate to new nested structure
             if _migrate_lease_to_new_structure(lease):
                 migrated = True
+            # Add lock-in and renewal fields to existing leases
+            if _migrate_lease_add_lock_in_and_renewal_fields(lease):
+                migrated = True
 
         # Save if any migrations occurred
         if migrated:
@@ -401,6 +419,16 @@ def _migrate_lease_to_new_structure(lease):
     for field in field_names:
         current_values[field] = lease.pop(field, None)
 
+    # Add lock-in period (new field)
+    current_values["lock_in_period"] = {
+        "duration_months": None
+    }
+
+    # Add renewal terms (new field)
+    current_values["renewal_terms"] = {
+        "rent_escalation_percent": None
+    }
+
     # Build source_document from source_filename
     source_filename = lease.pop("source_filename", None)
     lease["source_document"] = {
@@ -417,6 +445,37 @@ def _migrate_lease_to_new_structure(lease):
     lease["current_values"] = current_values
 
     return True
+
+
+def _migrate_lease_add_lock_in_and_renewal_fields(lease):
+    """Add lock_in_period and renewal_terms to existing leases if missing.
+
+    This migration is idempotent - safe to run multiple times.
+
+    Returns True if migration was performed, False if already has fields.
+    """
+    # Skip if no current_values (will be handled by _migrate_lease_to_new_structure)
+    if "current_values" not in lease:
+        return False
+
+    current_values = lease["current_values"]
+    migrated = False
+
+    # Add lock_in_period if missing
+    if "lock_in_period" not in current_values:
+        current_values["lock_in_period"] = {
+            "duration_months": None
+        }
+        migrated = True
+
+    # Add renewal_terms if missing
+    if "renewal_terms" not in current_values:
+        current_values["renewal_terms"] = {
+            "rent_escalation_percent": None
+        }
+        migrated = True
+
+    return migrated
 
 
 def load_lease_data():
@@ -835,6 +894,111 @@ def get_global_alerts(leases, max_alerts=5):
     return alerts[:max_alerts]
 
 
+def compare_lease_versions(current_lease, previous_lease):
+    """Compare two lease versions and return list of changes.
+
+    Args:
+        current_lease: The current (newer) lease version
+        previous_lease: The previous (older) lease version
+
+    Returns:
+        list: List of change dicts with {field, label, old_value, new_value, change_type}
+    """
+    if not current_lease or not previous_lease:
+        return []
+
+    # Fields to compare with their display labels
+    fields_to_compare = [
+        ("lease_start_date", "Start Date"),
+        ("lease_end_date", "End Date"),
+        ("monthly_rent", "Monthly Rent"),
+        ("security_deposit", "Security Deposit"),
+        ("rent_due_day", "Rent Due Day"),
+        ("lessee_name", "Tenant Name"),
+    ]
+
+    # Nested fields
+    nested_fields = [
+        ("lock_in_period", "duration_months", "Lock-in Period (months)"),
+        ("renewal_terms", "rent_escalation_percent", "Rent Escalation (%)"),
+    ]
+
+    current_cv = current_lease.get("current_values") or {}
+    previous_cv = previous_lease.get("current_values") or {}
+
+    changes = []
+
+    # Compare simple fields
+    for field, label in fields_to_compare:
+        old_val = previous_cv.get(field)
+        new_val = current_cv.get(field)
+
+        # Normalize empty values
+        old_normalized = None if (old_val is None or str(old_val).strip() == "") else old_val
+        new_normalized = None if (new_val is None or str(new_val).strip() == "") else new_val
+
+        # Skip if both are empty
+        if old_normalized is None and new_normalized is None:
+            continue
+
+        # Skip if equal
+        if str(old_normalized) == str(new_normalized):
+            continue
+
+        # Determine change type
+        if old_normalized is None:
+            change_type = "added"
+        elif new_normalized is None:
+            change_type = "removed"
+        else:
+            change_type = "changed"
+
+        changes.append({
+            "field": field,
+            "label": label,
+            "old_value": old_val,
+            "new_value": new_val,
+            "change_type": change_type
+        })
+
+    # Compare nested fields
+    for parent, child, label in nested_fields:
+        old_parent = previous_cv.get(parent) or {}
+        new_parent = current_cv.get(parent) or {}
+        old_val = old_parent.get(child) if isinstance(old_parent, dict) else None
+        new_val = new_parent.get(child) if isinstance(new_parent, dict) else None
+
+        # Normalize empty values
+        old_normalized = None if (old_val is None or str(old_val).strip() == "") else old_val
+        new_normalized = None if (new_val is None or str(new_val).strip() == "") else new_val
+
+        # Skip if both are empty
+        if old_normalized is None and new_normalized is None:
+            continue
+
+        # Skip if equal
+        if str(old_normalized) == str(new_normalized):
+            continue
+
+        # Determine change type
+        if old_normalized is None:
+            change_type = "added"
+        elif new_normalized is None:
+            change_type = "removed"
+        else:
+            change_type = "changed"
+
+        changes.append({
+            "field": f"{parent}.{child}",
+            "label": label,
+            "old_value": old_val,
+            "new_value": new_val,
+            "change_type": change_type
+        })
+
+    return changes
+
+
 @app.route("/")
 def index():
     """Display the main page or dashboard."""
@@ -886,9 +1050,22 @@ def index():
 
     # Get lease versions for history display
     lease_versions = []
+    version_changes = []
     if lease_data:
         lease_group_id = lease_data.get("lease_group_id", lease_data.get("id"))
         lease_versions = get_lease_versions(lease_group_id)
+
+        # Compare with previous version if this is a renewal (version > 1)
+        current_version = lease_data.get("version", 1)
+        if current_version > 1:
+            # Find the previous version
+            previous_version = None
+            for v in lease_versions:
+                if v.get("version") == current_version - 1:
+                    previous_version = v
+                    break
+            if previous_version:
+                version_changes = compare_lease_versions(lease_data, previous_version)
 
     return render_template("index.html",
                            uploads=uploads,
@@ -899,7 +1076,8 @@ def index():
                            show_dashboard=False,
                            renew_from=renew_from,
                            renew_from_lease=renew_from_lease,
-                           lease_versions=lease_versions)
+                           lease_versions=lease_versions,
+                           version_changes=version_changes)
 
 
 @app.route("/upload", methods=["POST"])
@@ -991,16 +1169,23 @@ def upload_file():
             },
             "ai_extraction": None,
             "current_values": {
-                # Copy party and payment info from original
+                # Convenience defaults only (property/landlord identity)
                 "lease_nickname": orig_values.get("lease_nickname"),
                 "lessor_name": orig_values.get("lessor_name"),
-                "lessee_name": orig_values.get("lessee_name"),
-                # Dates left empty for new lease terms
+                # All other fields must come from renewal PDF or manual entry
+                "lessee_name": None,
                 "lease_start_date": None,
                 "lease_end_date": None,
-                "monthly_rent": orig_values.get("monthly_rent"),
-                "security_deposit": orig_values.get("security_deposit"),
-                "rent_due_day": orig_values.get("rent_due_day"),
+                "monthly_rent": None,
+                "security_deposit": None,
+                "rent_due_day": None,
+                # Lease-specific terms (not inherited)
+                "lock_in_period": {
+                    "duration_months": None
+                },
+                "renewal_terms": {
+                    "rent_escalation_percent": None
+                },
             },
         }
         flash_msg = "Renewal lease uploaded! Review and update the new lease terms."
@@ -1029,6 +1214,12 @@ def upload_file():
                 "monthly_rent": None,
                 "security_deposit": None,
                 "rent_due_day": None,
+                "lock_in_period": {
+                    "duration_months": None
+                },
+                "renewal_terms": {
+                    "rent_escalation_percent": None
+                },
             },
         }
         flash_msg = "Lease uploaded! Fill in details manually or use AI extraction."
@@ -1107,6 +1298,12 @@ def save_lease():
         "monthly_rent": _validate_positive_number(request.form.get("monthly_rent")),
         "security_deposit": _validate_positive_number(request.form.get("security_deposit")),
         "rent_due_day": _validate_day_of_month(request.form.get("rent_due_day")),
+        "lock_in_period": {
+            "duration_months": _validate_positive_number(request.form.get("lock_in_months"))
+        },
+        "renewal_terms": {
+            "rent_escalation_percent": _validate_positive_number(request.form.get("rent_escalation_percent"))
+        },
     }
 
     # Load existing leases
