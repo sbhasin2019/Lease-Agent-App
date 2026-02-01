@@ -196,7 +196,31 @@ Violating these rules is considered a critical error.
   - Treat this as a production codebase                                                                                 
   - One logical change per step                                                                                         
   - If uncertain, ASK before acting                                                                                     
-                                                                                                                        
+ 
+  ----------------------------------------------------------------
+## Version Control & Workflow (GitHub + CLI)
+  ----------------------------------------------------------------
+
+### Current Setup
+- This project uses **Git** for version control.
+- Repository is hosted on **GitHub**:
+  https://github.com/sbhasin2019/Lease-Agent-App
+- Default branch: `main`
+- Development is done locally on macOS using **Terminal + Python venv**.
+- Claude is used via **CLI** to directly read and modify files.
+
+### Git Identity
+- Git user name: Saurabh Bhasin
+- Git email: GitHub noreply email (for privacy)
+  Format: <github-id>+sbhasin2019@users.noreply.github.com
+
+### Standard Git Workflow
+1. Make changes locally (Claude CLI edits files directly)
+2. Check status:
+   ```bash
+   git status
+
+                                                                                                                       
   ----------------------------------------------------------------                                                      
   END OF PROJECT CONTEXT                                                                                                
   ----------------------------------------------------------------                                                      
