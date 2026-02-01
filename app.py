@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 import calendar
 import uuid
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
 # Text extraction imports
@@ -1357,6 +1357,22 @@ def ai_prefill():
         "success": True,
         "data": result
     })
+
+
+@app.route("/view_pdf/<filename>")
+def view_pdf(filename):
+    """Serve a PDF file from the uploads folder for viewing."""
+    # Security: Only allow PDF files
+    if not filename.lower().endswith('.pdf'):
+        flash("Invalid file type.", "error")
+        return redirect(url_for("index"))
+
+    # Serve the file with inline disposition (displays in browser, not download)
+    return send_from_directory(
+        app.config["UPLOAD_FOLDER"],
+        filename,
+        mimetype="application/pdf"
+    )
 
 
 if __name__ == "__main__":
