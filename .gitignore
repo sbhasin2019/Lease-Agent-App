@@ -1,13 +1,11 @@
 # Python
-__pycache__/
 venv/
+__pycache__/
 *.pyc
 
-# Uploaded files
+# App data (DO NOT COMMIT)
+lease_data.json
 uploads/
 
-# Local data
-lease_data.json
-
-# OS
+# macOS
 .DS_Store
