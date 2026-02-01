@@ -1,0 +1,2727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lease Reminder</title>
+    <style>
+        /* Base styles */
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(180deg, #f8f9fb 0%, #eef1f5 50%, #e4e9f0 100%);
+            background-attachment: fixed;
+            margin: 0;
+            padding: 40px 20px 60px;
+            line-height: 1.6;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        /* Container */
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+        }
+
+        /* Page header */
+        .page-header {
+            margin-bottom: 32px;
+            position: relative;
+        }
+        .page-header::before {
+            content: '';
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 200px;
+            background: radial-gradient(ellipse at center, rgba(99, 132, 227, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .page-header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin: 0 0 8px 0;
+        }
+        .page-header p {
+            color: #6b7280;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        /* Card component */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 6px 16px rgba(0, 0, 0, 0.06);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+        .card-header {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .card-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 4px 0;
+        }
+        .card-header p {
+            color: #6b7280;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        /* Upload form card */
+        .upload-form {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+        .upload-form h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 4px 0;
+        }
+        .upload-form > p {
+            color: #6b7280;
+            margin: 0 0 20px 0;
+            font-size: 14px;
+        }
+        .upload-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            background: #fafafa;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .upload-zone:hover {
+            border-color: #007bff;
+            background: #f8faff;
+        }
+        .upload-form input[type="file"] {
+            margin: 12px 0 16px 0;
+            font-size: 14px;
+        }
+        .upload-form button {
+            background: #007bff;
+            color: white;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .upload-form button:hover {
+            background: #0056b3;
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 24px;
+        }
+        .flash-message {
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .flash-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .flash-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Uploads section */
+        .uploads-section {
+            margin-bottom: 24px;
+        }
+        .uploads-section > h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 16px 0;
+        }
+
+        /* Upload item (extracted text card) */
+        .upload-item {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 24px 28px;
+        }
+        .upload-item h4 {
+            margin: 0 0 6px 0;
+            color: #1a1a2e;
+            font-size: 16px;
+            font-weight: 600;
+            word-break: break-all;
+        }
+        .preview-box {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            color: #555;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .no-text {
+            color: #9ca3af;
+            font-style: italic;
+        }
+        .file-type {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 16px;
+        }
+
+        /* Confirm form card */
+        .confirm-form {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+        .confirm-form h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 4px 0;
+        }
+        .confirm-form > p {
+            color: #6b7280;
+            margin: 0 0 24px 0;
+            font-size: 14px;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #4b5563;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            box-sizing: border-box;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        }
+        .form-group input::placeholder {
+            color: #9ca3af;
+        }
+        /* AI suggestion hint - subtle helper text */
+        .ai-hint {
+            display: none;
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        .ai-hint.visible {
+            display: block;
+        }
+        /* AI-filled field indicator - subtle blue tint */
+        .ai-filled {
+            background-color: #f0f9ff !important;
+            border-color: #bae6fd !important;
+        }
+        .ai-filled:focus {
+            background-color: #fff !important;
+        }
+        /* User-edited field indicator - subtle green tint (locked from AI) */
+        .user-edited {
+            background-color: #f0fdf4 !important;
+            border-color: #bbf7d0 !important;
+        }
+        .user-edited:focus {
+            background-color: #fff !important;
+        }
+        /* AI Assistance summary card */
+        .ai-summary {
+            display: none;
+            margin-top: 20px;
+            padding: 14px 18px;
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
+            border-left: 3px solid #60a5fa;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #4b5563;
+        }
+        .ai-summary.visible {
+            display: block;
+        }
+        .ai-summary-title {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .ai-summary ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+        .ai-summary li {
+            margin-bottom: 4px;
+        }
+        .ai-summary li:last-child {
+            margin-bottom: 0;
+        }
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        /* Primary button (Save) */
+        .confirm-form button[type="submit"] {
+            background: #28a745;
+            color: white;
+            padding: 14px 32px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .confirm-form button[type="submit"]:hover {
+            background: #218838;
+        }
+
+        /* Text reference box */
+        .full-text-box {
+            width: 100%;
+            height: 180px;
+            padding: 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 13px;
+            background: #f9fafb;
+            resize: vertical;
+            box-sizing: border-box;
+            color: #4b5563;
+        }
+        .text-reference {
+            margin-top: 20px;
+        }
+        .text-reference label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #4b5563;
+        }
+
+        /* View section card */
+        .view-section {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+        .view-section h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 20px 0;
+        }
+        .field-row {
+            display: flex;
+            padding: 14px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .field-row:last-of-type {
+            border-bottom: none;
+        }
+        .field-label {
+            font-weight: 500;
+            color: #6b7280;
+            width: 180px;
+            flex-shrink: 0;
+            font-size: 14px;
+        }
+        .field-value {
+            color: #1a1a2e;
+            font-size: 15px;
+        }
+
+        /* Button: Edit - Pastel Blue */
+        .btn-edit {
+            display: inline-block;
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 12px 24px;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-edit:hover {
+            background: #bae6fd;
+            border-color: #7dd3fc;
+        }
+
+        /* Button: Cancel */
+        .btn-cancel {
+            display: inline-block;
+            margin-left: 12px;
+            background: #6b7280;
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .btn-cancel:hover {
+            background: #4b5563;
+        }
+
+        /* Button: Reset / Destructive - Pastel Red */
+        .btn-reset {
+            display: inline-block;
+            background: #fee2e2;
+            color: #b91c1c;
+            padding: 12px 24px;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-reset:hover {
+            background: #fecaca;
+            border-color: #fca5a5;
+        }
+
+        /* Form buttons container */
+        .form-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 28px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* Button: AI */
+        .btn-ai {
+            background: #6f42c1;
+            color: white;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .btn-ai:hover {
+            background: #5a32a3;
+        }
+        .btn-ai:disabled {
+            background: #a88cd4;
+            cursor: not-allowed;
+        }
+
+        /* AI message */
+        .ai-message {
+            margin-top: 20px;
+            padding: 14px 18px;
+            border-radius: 8px;
+            display: none;
+            font-size: 14px;
+        }
+        .ai-message.visible {
+            display: block;
+        }
+        .ai-message.error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .ai-message.success {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .ai-message.loading {
+            background: #f5f3ff;
+            color: #5b21b6;
+            border: 1px solid #ddd6fe;
+        }
+
+        /* AI Update Summary */
+        .ai-update-summary {
+            margin-bottom: 12px;
+        }
+        .ai-update-summary strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+        .ai-update-list {
+            margin: 0;
+            padding-left: 20px;
+            font-size: 13px;
+            color: #166534;
+        }
+        .ai-update-list li {
+            margin-bottom: 2px;
+        }
+
+        /* AI Overwrite Warning */
+        .ai-overwrite-warning {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-top: 12px;
+        }
+        .ai-overwrite-warning strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #92400e;
+            font-size: 13px;
+        }
+        .ai-overwrite-list {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+            font-size: 13px;
+        }
+        .ai-overwrite-list li {
+            margin-bottom: 6px;
+            padding: 6px 10px;
+            background: #fef3c7;
+            border-radius: 4px;
+        }
+        .ai-overwrite-list li:last-child {
+            margin-bottom: 0;
+        }
+        .ai-overwrite-list .field-name {
+            font-weight: 600;
+            color: #78350f;
+        }
+        .ai-overwrite-list .old-value {
+            color: #b91c1c;
+            text-decoration: line-through;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+        }
+        .ai-overwrite-list .arrow {
+            color: #9ca3af;
+            margin: 0 4px;
+        }
+        .ai-overwrite-list .new-value {
+            color: #166534;
+            font-weight: 500;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+        }
+
+        /* Reminder urgency styles */
+        .reminder-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 24px 28px;
+            margin-bottom: 24px;
+        }
+        .reminder-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 20px 0;
+        }
+        .reminder-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .reminder-item {
+            padding: 16px 20px;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        .reminder-item .reminder-label {
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 6px;
+        }
+        .reminder-item .reminder-days {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .reminder-item .reminder-days span {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .reminder-item .reminder-message {
+            font-size: 14px;
+            margin-top: 6px;
+        }
+        .urgency-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* Urgency: None */
+        .reminder-item.urgency-none {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+        .reminder-item.urgency-none .reminder-label { color: #6b7280; }
+        .reminder-item.urgency-none .reminder-days { color: #374151; }
+        .reminder-item.urgency-none .reminder-message { color: #6b7280; }
+        .urgency-badge.urgency-none {
+            background: #e5e7eb;
+            color: #6b7280;
+        }
+
+        /* Urgency: Info - VIBRANT BLUE */
+        .reminder-item.urgency-info {
+            background: #eff6ff;
+            border-color: #2563eb;
+        }
+        .reminder-item.urgency-info .reminder-label { color: #2563eb; }
+        .reminder-item.urgency-info .reminder-days { color: #1d4ed8; }
+        .reminder-item.urgency-info .reminder-message { color: #2563eb; }
+        .urgency-badge.urgency-info {
+            background: #60a5fa;
+            color: #1e3a8a;
+        }
+
+        /* Urgency: Warning - VIBRANT AMBER */
+        .reminder-item.urgency-warning {
+            background: #fef6e0;
+            border-color: #f59e0b;
+        }
+        .reminder-item.urgency-warning .reminder-label { color: #d97706; }
+        .reminder-item.urgency-warning .reminder-days { color: #b45309; }
+        .reminder-item.urgency-warning .reminder-message { color: #d97706; }
+        .urgency-badge.urgency-warning {
+            background: #fbbf24;
+            color: #78350f;
+        }
+
+        /* Urgency: Urgent - VIBRANT ORANGE */
+        .reminder-item.urgency-urgent {
+            background: #fff1e6;
+            border-color: #ea580c;
+        }
+        .reminder-item.urgency-urgent .reminder-label { color: #ea580c; }
+        .reminder-item.urgency-urgent .reminder-days { color: #c2410c; }
+        .reminder-item.urgency-urgent .reminder-message { color: #ea580c; }
+        .urgency-badge.urgency-urgent {
+            background: #fb923c;
+            color: #7c2d12;
+        }
+
+        /* Urgency: Critical - VIBRANT RED */
+        .reminder-item.urgency-critical {
+            background: #fee8e8;
+            border-color: #dc2626;
+        }
+        .reminder-item.urgency-critical .reminder-label { color: #dc2626; }
+        .reminder-item.urgency-critical .reminder-days { color: #b91c1c; }
+        .reminder-item.urgency-critical .reminder-message { color: #dc2626; }
+        .urgency-badge.urgency-critical {
+            background: #f87171;
+            color: #fff;
+        }
+
+        /* ========================================
+           URGENCY ESCALATION - Visual Enhancements
+           ======================================== */
+
+        /* Keyframes: Slow pulse for urgent level - VIBRANT */
+        @keyframes pulse-urgent {
+            0%, 100% {
+                box-shadow: 0 2px 4px rgba(234, 88, 12, 0.2), 0 4px 12px rgba(234, 88, 12, 0.1);
+            }
+            50% {
+                box-shadow: 0 2px 8px rgba(234, 88, 12, 0.4), 0 6px 20px rgba(234, 88, 12, 0.25);
+            }
+        }
+
+        /* Keyframes: Subtle horizontal shake for critical level (max 2px) */
+        @keyframes shake-critical {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-1px); }
+            40% { transform: translateX(2px); }
+            60% { transform: translateX(-2px); }
+            80% { transform: translateX(1px); }
+        }
+
+        /* Enhanced Warning: stronger border + vibrant warning shadow */
+        .reminder-item.urgency-warning {
+            border-left-width: 5px;
+            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(245, 158, 11, 0.15);
+        }
+
+        /* Enhanced Urgent: vibrant orange + slow pulse animation */
+        .reminder-item.urgency-urgent {
+            border-left-width: 5px;
+            background: #fff1e6;
+            box-shadow: 0 2px 4px rgba(234, 88, 12, 0.25), 0 4px 12px rgba(234, 88, 12, 0.15);
+            animation: pulse-urgent 2.5s ease-in-out infinite;
+        }
+
+        /* Enhanced Critical: vibrant red + subtle shake animation */
+        .reminder-item.urgency-critical {
+            border-left-width: 6px;
+            background: #fee8e8;
+            border-color: #dc2626;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3), 0 4px 14px rgba(220, 38, 38, 0.2);
+            animation: shake-critical 0.6s ease-in-out infinite;
+            animation-delay: 3s;
+        }
+
+        /* Urgency icon styling */
+        .urgency-icon {
+            margin-right: 3px;
+            font-style: normal;
+        }
+
+        /* ======================================== */
+
+        /* View section button group */
+        .view-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #f3f4f6;
+        }
+        .view-actions .btn-edit,
+        .view-actions .btn-reset,
+        .view-actions .btn-renew,
+        .view-actions form {
+            margin: 0;
+        }
+
+        /* Button: Renew - Pastel Green */
+        .btn-renew {
+            display: inline-block;
+            background: #d1fae5;
+            color: #065f46;
+            padding: 12px 24px;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-renew:hover {
+            background: #a7f3d0;
+            border-color: #6ee7b7;
+        }
+
+        /* Button: Delete Lease (dashboard cards) */
+        .btn-delete-lease {
+            display: block;
+            width: 100%;
+            padding: 10px 16px;
+            margin-top: 8px;
+            background: #fff;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-delete-lease:hover {
+            background: #fef2f2;
+            border-color: #f87171;
+        }
+
+        /* Renewal context message */
+        .renewal-context {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-left: 3px solid #22c55e;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #166534;
+        }
+        .renewal-context strong {
+            color: #15803d;
+        }
+
+        /* ========================================
+           LEASE VERSION HISTORY
+           ======================================== */
+        .version-history {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 24px 28px;
+            margin-bottom: 24px;
+        }
+        .version-history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .version-history-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0;
+        }
+        .version-count {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+        .version-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .version-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            color: inherit;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .version-item.current {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+        .version-item.previous {
+            opacity: 0.85;
+        }
+        .version-badge {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            background: #f3f4f6;
+            padding: 6px 12px;
+            border-radius: 6px;
+            min-width: 32px;
+            text-align: center;
+        }
+        .version-item.current .version-badge {
+            background: #3b82f6;
+            color: #fff;
+        }
+        .version-details {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 24px;
+            font-size: 13px;
+        }
+        .version-detail {
+            display: flex;
+            gap: 6px;
+        }
+        .version-detail-label {
+            color: #9ca3af;
+        }
+        .version-detail-value {
+            color: #374151;
+            font-weight: 500;
+        }
+        .version-item.previous .version-detail-value {
+            color: #6b7280;
+        }
+        .version-status {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        .version-status.current {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .version-status.previous {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .version-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .btn-view-version {
+            padding: 6px 12px;
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-view-version:hover {
+            background: #dbeafe;
+            border-color: #93c5fd;
+        }
+        .btn-view-version.viewing {
+            background: #e0e7ff;
+            color: #4338ca;
+            border-color: #c7d2fe;
+            cursor: default;
+        }
+        .btn-delete-version {
+            padding: 6px 12px;
+            background: #fff;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-delete-version:hover {
+            background: #fef2f2;
+            border-color: #f87171;
+        }
+
+        /* ========================================
+           DELETE CONFIRMATION MODAL
+           ======================================== */
+        .delete-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .delete-modal-overlay.visible {
+            display: flex;
+        }
+        .delete-modal {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 480px;
+            width: 90%;
+            overflow: hidden;
+        }
+        .delete-modal-header {
+            background: #fef2f2;
+            border-bottom: 1px solid #fecaca;
+            padding: 20px 24px;
+        }
+        .delete-modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #991b1b;
+        }
+        .delete-modal-body {
+            padding: 24px;
+        }
+        .delete-modal-warning {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .delete-modal-warning p {
+            margin: 0;
+            font-size: 14px;
+            color: #991b1b;
+            line-height: 1.5;
+        }
+        .delete-modal-warning strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .delete-modal-info {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.5;
+        }
+        .delete-modal-info .lease-name {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .delete-modal-confirm {
+            margin-bottom: 20px;
+        }
+        .delete-modal-confirm label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .delete-modal-confirm code {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+        }
+        .delete-modal-confirm input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+        .delete-modal-confirm input:focus {
+            outline: none;
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+        }
+        .delete-modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .delete-modal-cancel {
+            padding: 12px 24px;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .delete-modal-cancel:hover {
+            background: #f3f4f6;
+        }
+        .delete-modal-submit {
+            padding: 12px 24px;
+            background: #dc2626;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, opacity 0.15s;
+        }
+        .delete-modal-submit:hover:not(:disabled) {
+            background: #b91c1c;
+        }
+        .delete-modal-submit:disabled {
+            background: #fca5a5;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .delete-trigger {
+            cursor: pointer;
+        }
+
+        /* ========================================
+           EXTRACTED TEXT MODAL
+           ======================================== */
+        .text-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .text-modal-overlay.visible {
+            display: flex;
+        }
+        .text-modal {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .text-modal-header {
+            background: #f0f9ff;
+            border-bottom: 1px solid #bae6fd;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .text-modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #0369a1;
+        }
+        .text-modal-close {
+            background: #e0f2fe;
+            border: 1px solid #7dd3fc;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #0369a1;
+            cursor: pointer;
+        }
+        .text-modal-close:hover {
+            background: #bae6fd;
+        }
+        .text-modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .text-modal-body textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            background: #f9fafb;
+            color: #374151;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .btn-view-text {
+            background: #e0f2fe;
+            border: 1px solid #7dd3fc;
+            color: #0369a1;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .btn-view-text:hover {
+            background: #bae6fd;
+        }
+
+        /* ========================================
+           LEASE DETAILS - Grouping & Hierarchy
+           ======================================== */
+
+        /* Lease nickname as title */
+        .lease-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin: 0 0 20px 0;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .lease-title-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        /* Section group container */
+        .details-group {
+            margin-bottom: 24px;
+        }
+        .details-group:last-of-type {
+            margin-bottom: 0;
+        }
+
+        /* Section header */
+        .details-group-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin: 0 0 12px 0;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .details-group:first-of-type .details-group-header {
+            padding-top: 0;
+            border-top: none;
+        }
+
+        /* Remove bottom border from last field-row in group */
+        .details-group .field-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        /* Date values - bolder emphasis */
+        .field-value.value-date {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* Money values - monospace + green tint */
+        .field-value.value-money {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-weight: 600;
+            color: #059669;
+            letter-spacing: -0.3px;
+        }
+
+        /* Metadata section - muted styling */
+        .details-meta {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px dashed #d1d5db;
+        }
+        .details-meta .field-row {
+            padding: 8px 0;
+            border-bottom: none;
+        }
+        .details-meta .field-label {
+            color: #9ca3af;
+            font-size: 13px;
+        }
+        .details-meta .field-value {
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        /* ======================================== */
+
+        /* ========================================
+           LEASES DASHBOARD - Grid View
+           ======================================== */
+
+        .leases-dashboard {
+            margin-bottom: 32px;
+        }
+        .leases-dashboard-header {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .leases-dashboard h3 {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0;
+        }
+        .leases-dashboard-count {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 400;
+        }
+        .leases-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        @media (max-width: 640px) {
+            .leases-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .lease-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+            padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.15s, border-color 0.15s;
+            border: 1px solid #e5e7eb;
+            cursor: default;
+        }
+        .lease-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.06);
+            border-color: #d1d5db;
+        }
+        .lease-card.active {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);
+        }
+        .lease-card.active:hover {
+            transform: none;
+        }
+        .lease-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .lease-card-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #1a1a2e;
+            line-height: 1.3;
+        }
+        .lease-card-badge {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: #fff;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        .lease-card-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+        }
+        .lease-card-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .lease-card-label {
+            color: #6b7280;
+        }
+        .lease-card-value {
+            color: #374151;
+            font-weight: 500;
+        }
+        .lease-card-value.rent {
+            color: #059669;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        .lease-card-footer {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        /* Lease Card Urgency Levels - Subtle Visual Cues */
+        .lease-card.urgency-none {
+            /* Default - no changes */
+        }
+        .lease-card.urgency-info {
+            border-left: 3px solid #93c5fd;
+            background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
+        }
+        .lease-card.urgency-warning {
+            border-left: 3px solid #fbbf24;
+            background: linear-gradient(135deg, #fffbeb 0%, #fff 100%);
+        }
+        .lease-card.urgency-urgent {
+            border-left: 3px solid #f87171;
+            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
+        }
+        .lease-card.urgency-critical {
+            border-left: 4px solid #dc2626;
+            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
+            box-shadow: 0 2px 4px rgba(220, 38, 38, 0.1), 0 6px 16px rgba(0, 0, 0, 0.08);
+        }
+        /* Override active card styling when urgency present */
+        .lease-card.active.urgency-info {
+            border-color: #3b82f6;
+            border-left: 3px solid #93c5fd;
+        }
+        .lease-card.active.urgency-warning {
+            border-color: #f59e0b;
+            border-left: 3px solid #fbbf24;
+        }
+        .lease-card.active.urgency-urgent {
+            border-color: #ef4444;
+            border-left: 3px solid #f87171;
+        }
+        .lease-card.active.urgency-critical {
+            border-color: #dc2626;
+            border-left: 4px solid #dc2626;
+        }
+
+        /* Dashboard-First View */
+        .dashboard-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 28px;
+        }
+
+        /* Global Alerts Ticker */
+        .global-alerts {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .global-alerts-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            padding: 12px 16px 8px;
+            border-bottom: 1px solid #f3f4f6;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .alert-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            text-decoration: none;
+            color: inherit;
+            border-bottom: 1px solid #f9fafb;
+            transition: background 0.1s;
+        }
+        .alert-row:last-child {
+            border-bottom: none;
+        }
+        .alert-row:hover {
+            background: #f9fafb;
+        }
+        .alert-urgency {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .alert-urgency.critical {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        .alert-urgency.urgent {
+            background: #fff7ed;
+            color: #ea580c;
+        }
+        .alert-urgency.warning {
+            background: #fffbeb;
+            color: #d97706;
+        }
+        .alert-urgency.info {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        .alert-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .alert-message {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1f2937;
+        }
+        .alert-type {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-right: 6px;
+        }
+        .alert-action {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        /* Landlord Group Headers */
+        .landlord-group {
+            margin-bottom: 32px;
+        }
+        .landlord-group:last-child {
+            margin-bottom: 0;
+        }
+        .landlord-group-header {
+            font-size: 15px;
+            font-weight: 500;
+            color: #6b7280;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .btn-upload-new {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-upload-new:hover {
+            background: #2563eb;
+        }
+
+        /* Dashboard Lease Cards - Equal Height */
+        .leases-grid .lease-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 220px;
+        }
+        .lease-card-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .lease-card-title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #1a1a2e;
+            line-height: 1.3;
+            margin-bottom: 16px;
+        }
+        .lease-card-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .lease-card-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .lease-card-meta-label {
+            color: #9ca3af;
+        }
+        .lease-card-meta-value {
+            color: #374151;
+            font-weight: 500;
+        }
+        .lease-card-meta-value.rent {
+            color: #059669;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        /* Urgency Block - Prominent Days Display */
+        .lease-card-urgency {
+            margin-top: auto;
+            padding: 14px 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .lease-card-urgency .days-value {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .lease-card-urgency .days-text {
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+        .lease-card-urgency.positive {
+            background: #f0fdf4;
+            color: #166534;
+        }
+        .lease-card-urgency.warning {
+            background: #fffbeb;
+            color: #92400e;
+        }
+        .lease-card-urgency.critical {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
+        .lease-card-urgency.expired {
+            background: #fef2f2;
+            color: #7f1d1d;
+        }
+        .lease-card-urgency.no-date {
+            background: #f9fafb;
+            color: #9ca3af;
+            padding: 10px 12px;
+        }
+        .lease-card-urgency.no-date .days-text {
+            font-size: 13px;
+        }
+
+        /* Card urgency border accents */
+        .leases-grid .lease-card.card-warning {
+            border-left: 3px solid #fbbf24;
+        }
+        .leases-grid .lease-card.card-critical {
+            border-left: 3px solid #ef4444;
+        }
+        .leases-grid .lease-card.card-expired {
+            border-left: 4px solid #b91c1c;
+        }
+
+        .btn-view-lease {
+            display: block;
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 16px;
+            background: #f8f9fa;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-view-lease:hover {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+
+        /* Empty State */
+        .dashboard-empty {
+            text-align: center;
+            padding: 80px 32px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .dashboard-empty h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0 0 8px 0;
+        }
+        .dashboard-empty p {
+            color: #6b7280;
+            margin: 0 0 28px 0;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        /* Dashboard Navigation - Back Link */
+        .dashboard-nav {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .dashboard-nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #6b7280;
+            text-decoration: none;
+            transition: color 0.15s;
+            letter-spacing: 0.01em;
+        }
+        .dashboard-nav-link:hover {
+            color: #374151;
+        }
+        .dashboard-nav-link span {
+            font-size: 14px;
+            color: #9ca3af;
+            transition: color 0.15s;
+        }
+        .dashboard-nav-link:hover span {
+            color: #6b7280;
+        }
+
+        /* ======================================== */
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            body {
+                padding: 24px 16px 40px;
+            }
+            .card, .upload-form, .confirm-form, .view-section, .upload-item {
+                padding: 20px;
+            }
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            .field-row {
+                flex-direction: column;
+                gap: 4px;
+            }
+            .field-label {
+                width: 100%;
+            }
+            .form-buttons {
+                flex-wrap: wrap;
+            }
+            .view-actions {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <h1>Lease Reminder App</h1>
+        <p>Welcome! This app will help you track your lease details.</p>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if show_dashboard %}
+    <!-- DASHBOARD-FIRST VIEW -->
+    <div class="leases-dashboard">
+        {% if global_alerts and global_alerts|length > 0 %}
+        <div class="global-alerts">
+            <div class="global-alerts-header">Alerts</div>
+            {% for alert in global_alerts %}
+            <a href="/?lease_id={{ alert.lease_id }}" class="alert-row">
+                <span class="alert-urgency {{ alert.urgency }}">{% if alert.urgency == 'critical' %}Action Required{% elif alert.urgency == 'urgent' %}Attention{% elif alert.urgency == 'warning' %}Upcoming{% else %}Reminder{% endif %}</span>
+                <span class="alert-content">
+                    <span class="alert-message">
+                        <span class="alert-type">{% if alert.type == 'lease_expiry' %}Lease{% else %}Rent{% endif %}</span>{{ alert.message }}
+                    </span>
+                    <span class="alert-action">{{ alert.lease_nickname }}</span>
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if leases and leases|length > 0 %}
+        <div class="leases-dashboard-header">
+            <h3>Your Leases</h3>
+            <span class="leases-dashboard-count">{{ leases|length }} lease{% if leases|length != 1 %}s{% endif %}</span>
+        </div>
+        <div class="dashboard-actions">
+            <a href="/?new=true" class="btn-upload-new">+ Upload New Lease</a>
+        </div>
+        {% for lessor_name, lessor_leases in grouped_leases.items() %}
+        <div class="landlord-group">
+            <div class="landlord-group-header">{{ lessor_name }}</div>
+            <div class="leases-grid">
+                {% for lease in lessor_leases %}
+                {% set lcv = lease.current_values if lease.current_values else lease %}
+                {% set days_remaining = lcv.lease_end_date | days_until %}
+                <div class="lease-card {% if days_remaining is not none %}{% if days_remaining < 0 %}card-expired{% elif days_remaining <= 10 %}card-critical{% elif days_remaining <= 30 %}card-warning{% endif %}{% endif %}">
+                    <div class="lease-card-content">
+                        <div class="lease-card-title">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
+                        <div class="lease-card-meta">
+                            <div class="lease-card-meta-row">
+                                <span class="lease-card-meta-label">End Date</span>
+                                <span class="lease-card-meta-value">{{ lcv.lease_end_date or '—' }}</span>
+                            </div>
+                            <div class="lease-card-meta-row">
+                                <span class="lease-card-meta-label">Monthly Rent</span>
+                                <span class="lease-card-meta-value rent">{% if lcv.monthly_rent %}₹{{ lcv.monthly_rent }}{% else %}—{% endif %}</span>
+                            </div>
+                        </div>
+                        {% if days_remaining is not none %}
+                        <div class="lease-card-urgency {% if days_remaining < 0 %}expired{% elif days_remaining <= 10 %}critical{% elif days_remaining <= 30 %}warning{% else %}positive{% endif %}">
+                            <div class="days-value">{% if days_remaining < 0 %}{{ days_remaining | abs }}{% elif days_remaining == 0 %}0{% else %}{{ days_remaining }}{% endif %}</div>
+                            <div class="days-text">{% if days_remaining < 0 %}days overdue{% elif days_remaining == 0 %}expires today{% elif days_remaining == 1 %}day left{% else %}days left{% endif %}</div>
+                        </div>
+                        {% else %}
+                        <div class="lease-card-urgency no-date">
+                            <div class="days-text">No end date set</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="lease-card-actions">
+                        <a href="/?lease_id={{ lease.id }}" class="btn-view-lease">View Lease</a>
+                        <button type="button" class="btn-delete-lease delete-trigger"
+                                onclick="openDeleteModal('{{ lease.id }}', '{{ lcv.lease_nickname|e if lcv.lease_nickname else 'Untitled Lease' }}', false)">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <!-- Empty state -->
+        <div class="dashboard-empty">
+            <h3>No leases yet</h3>
+            <p>Upload a lease document to start tracking<br>important dates and payment reminders.</p>
+            <a href="/?new=true" class="btn-upload-new">+ Upload Your First Lease</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% elif lease_data and not edit_mode %}
+    <!-- VIEW MODE: Display saved lease details -->
+    {% set cv = lease_data.current_values if lease_data.current_values else lease_data %}
+
+    {% if leases and leases|length > 1 %}
+    <!-- Dashboard Navigation - Back Link -->
+    <div class="dashboard-nav">
+        <a href="/" class="dashboard-nav-link">
+            <span>←</span> All Leases
+        </a>
+    </div>
+    {% endif %}
+
+    {% if reminder_status and (reminder_status.lease_expiry or reminder_status.rent_payment) %}
+    <div class="reminder-card">
+        <h3>Reminders</h3>
+        <div class="reminder-grid">
+            {% if reminder_status.lease_expiry %}
+            <div class="reminder-item urgency-{{ reminder_status.lease_expiry.urgency }}">
+                <div class="reminder-label">
+                    Lease Expiry
+                    {% if reminder_status.lease_expiry.urgency != 'none' %}
+                    <span class="urgency-badge urgency-{{ reminder_status.lease_expiry.urgency }}">
+                        <span class="urgency-icon">{% if reminder_status.lease_expiry.urgency == 'info' %}&#8505;&#65039;{% elif reminder_status.lease_expiry.urgency == 'warning' %}&#9888;&#65039;{% elif reminder_status.lease_expiry.urgency == 'urgent' %}&#128276;{% elif reminder_status.lease_expiry.urgency == 'critical' %}&#128680;{% endif %}</span>{{ reminder_status.lease_expiry.urgency }}
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="reminder-days">
+                    {% if reminder_status.lease_expiry.days_remaining >= 0 %}
+                        {{ reminder_status.lease_expiry.days_remaining }} <span>days left</span>
+                    {% else %}
+                        {{ reminder_status.lease_expiry.days_remaining|abs }} <span>days overdue</span>
+                    {% endif %}
+                </div>
+                <div class="reminder-message">{{ reminder_status.lease_expiry.message }}</div>
+            </div>
+            {% endif %}
+            {% if reminder_status.rent_payment %}
+            <div class="reminder-item urgency-{{ reminder_status.rent_payment.urgency }}">
+                <div class="reminder-label">
+                    Rent Payment
+                    {% if reminder_status.rent_payment.urgency != 'none' %}
+                    <span class="urgency-badge urgency-{{ reminder_status.rent_payment.urgency }}">
+                        <span class="urgency-icon">{% if reminder_status.rent_payment.urgency == 'info' %}&#8505;&#65039;{% elif reminder_status.rent_payment.urgency == 'warning' %}&#9888;&#65039;{% elif reminder_status.rent_payment.urgency == 'urgent' %}&#128276;{% elif reminder_status.rent_payment.urgency == 'critical' %}&#128680;{% endif %}</span>{{ reminder_status.rent_payment.urgency }}
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="reminder-days">
+                    {% if reminder_status.rent_payment.days_remaining >= 0 %}
+                        {{ reminder_status.rent_payment.days_remaining }} <span>days until due</span>
+                    {% else %}
+                        {{ reminder_status.rent_payment.days_remaining|abs }} <span>days overdue</span>
+                    {% endif %}
+                </div>
+                <div class="reminder-message">{{ reminder_status.rent_payment.message }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="view-section">
+        <h3>Lease Details</h3>
+
+        <!-- Lease Nickname as Title -->
+        <div class="lease-title">
+            <span class="lease-title-label">Lease Nickname</span>
+            {{ cv.lease_nickname or 'Untitled Lease' }}
+        </div>
+
+        <!-- SECTION A: Parties -->
+        <div class="details-group">
+            <h4 class="details-group-header">Parties</h4>
+            <div class="field-row">
+                <span class="field-label">Lessor / Licensor</span>
+                <span class="field-value">{{ cv.lessor_name or '—' }}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Lessee / Licensee</span>
+                <span class="field-value">{{ cv.lessee_name or '—' }}</span>
+            </div>
+        </div>
+
+        <!-- SECTION B: Key Dates -->
+        <div class="details-group">
+            <h4 class="details-group-header">Key Dates</h4>
+            <div class="field-row">
+                <span class="field-label">Lease Start Date</span>
+                <span class="field-value value-date">{{ cv.lease_start_date or '—' }}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Lease End Date</span>
+                <span class="field-value value-date">{{ cv.lease_end_date or '—' }}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Rent Due Day</span>
+                <span class="field-value value-date">{{ cv.rent_due_day or '—' }}{% if cv.rent_due_day %} of each month{% endif %}</span>
+            </div>
+        </div>
+
+        <!-- SECTION C: Financials -->
+        <div class="details-group">
+            <h4 class="details-group-header">Financials</h4>
+            <div class="field-row">
+                <span class="field-label">Monthly Rent</span>
+                <span class="field-value value-money">{% if cv.monthly_rent %}₹{{ cv.monthly_rent }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Security Deposit</span>
+                <span class="field-value value-money">{% if cv.security_deposit %}₹{{ cv.security_deposit }}{% else %}—{% endif %}</span>
+            </div>
+        </div>
+
+        <!-- Metadata -->
+        {% set source_doc = lease_data.source_document if lease_data.source_document else {} %}
+        <div class="details-meta">
+            <div class="field-row">
+                <span class="field-label">Source File</span>
+                <span class="field-value">{{ source_doc.filename or lease_data.source_filename or '—' }}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Last Saved</span>
+                <span class="field-value">{{ lease_data.updated_at or lease_data.saved_at or '—' }}</span>
+            </div>
+        </div>
+
+        <div class="view-actions">
+            <a href="/?lease_id={{ lease_data.id }}&edit=true" class="btn-edit">Edit Lease</a>
+            <a href="/?new=true&renew_from={{ lease_data.id }}" class="btn-renew">Add Renewal Lease</a>
+            {% if lease_data.source_document and lease_data.source_document.extracted_text %}
+            <button type="button" class="btn-view-text" onclick="openTextModal()">
+                View Extracted Text
+            </button>
+            {% endif %}
+            <button type="button" class="btn-reset delete-trigger"
+                    onclick="openDeleteModal('{{ lease_data.id }}', '{{ lease_data.lease_nickname|e if lease_data.lease_nickname else 'Untitled Lease' }}', false)">
+                Delete Lease
+            </button>
+        </div>
+    </div>
+
+    {% if lease_versions and lease_versions|length > 1 %}
+    <!-- LEASE VERSION HISTORY -->
+    <div class="version-history">
+        <div class="version-history-header">
+            <h3>Lease History</h3>
+            <span class="version-count">{{ lease_versions|length }} version{% if lease_versions|length != 1 %}s{% endif %}</span>
+        </div>
+        <div class="version-list">
+            {% for version in lease_versions %}
+            <div class="version-item {% if version.is_current %}current{% else %}previous{% endif %}">
+                <span class="version-badge">v{{ version.version or 1 }}</span>
+                <div class="version-details">
+                    <div class="version-detail">
+                        <span class="version-detail-label">Start:</span>
+                        <span class="version-detail-value">{{ version.lease_start_date or '—' }}</span>
+                    </div>
+                    <div class="version-detail">
+                        <span class="version-detail-label">End:</span>
+                        <span class="version-detail-value">{{ version.lease_end_date or '—' }}</span>
+                    </div>
+                    <div class="version-detail">
+                        <span class="version-detail-label">File:</span>
+                        <span class="version-detail-value">{{ version.source_filename or '—' }}</span>
+                    </div>
+                </div>
+                <span class="version-status {% if version.is_current %}current{% else %}previous{% endif %}">
+                    {% if version.is_current %}Current{% else %}Previous{% endif %}
+                </span>
+                <div class="version-actions">
+                    {% if version.id == lease_data.id %}
+                    <span class="btn-view-version viewing">Viewing</span>
+                    {% else %}
+                    <a href="/?lease_id={{ version.id }}" class="btn-view-version">View</a>
+                    {% endif %}
+                    <button type="button" class="btn-delete-version"
+                            onclick="openVersionDeleteModal('{{ version.id }}', '{{ version.version or 1 }}', {{ 'true' if version.is_current else 'false' }}, {{ lease_versions|length }})">
+                        Delete
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% elif edit_mode %}
+    <!-- EDIT MODE: Form pre-filled with existing data -->
+    <div class="dashboard-nav">
+        <a href="/" class="dashboard-nav-link">
+            <span>←</span> Back
+        </a>
+    </div>
+    <div class="confirm-form">
+        <h3>Edit Lease Details</h3>
+        <p>Update the lease details below.</p>
+
+        <!-- Extracted text reference panel -->
+        {% set source_doc = lease_data.source_document if lease_data.source_document else {} %}
+        {% set extracted_text = source_doc.extracted_text if source_doc else None %}
+        {% set cv = lease_data.current_values if lease_data.current_values else lease_data %}
+        <div class="text-reference">
+            <label>Extracted Text (read-only reference)</label>
+            {% if extracted_text %}
+                <textarea class="full-text-box" readonly>{{ extracted_text }}</textarea>
+            {% else %}
+                <textarea class="full-text-box" readonly>No extracted text available.</textarea>
+            {% endif %}
+        </div>
+
+        <form action="{{ url_for('save_lease') }}" method="post">
+            <input type="hidden" name="lease_id" value="{{ lease_data.id }}">
+
+            <div class="form-group">
+                <label for="lease_nickname">Lease Nickname</label>
+                <input type="text" id="lease_nickname" name="lease_nickname" placeholder="e.g., Main Apartment" value="{{ cv.lease_nickname or '' }}">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lessor_name">Lessor / Licensor Name</label>
+                    <input type="text" id="lessor_name" name="lessor_name" placeholder="Landlord name" value="{{ cv.lessor_name or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="lessee_name">Lessee / Licensee Name</label>
+                    <input type="text" id="lessee_name" name="lessee_name" placeholder="Tenant name" value="{{ cv.lessee_name or '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lease_start_date">Lease Start Date</label>
+                    <input type="date" id="lease_start_date" name="lease_start_date" value="{{ cv.lease_start_date or '' }}" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="lease_end_date">Lease End Date</label>
+                    <input type="date" id="lease_end_date" name="lease_end_date" value="{{ cv.lease_end_date or '' }}" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="monthly_rent">Monthly Rent</label>
+                    <input type="number" id="monthly_rent" name="monthly_rent" placeholder="0" min="0" value="{{ cv.monthly_rent or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="security_deposit">Security Deposit</label>
+                    <input type="number" id="security_deposit" name="security_deposit" placeholder="0" min="0" value="{{ cv.security_deposit or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group" style="max-width: 200px;">
+                <label for="rent_due_day">Rent Due Day (1-31)</label>
+                <input type="number" id="rent_due_day" name="rent_due_day" placeholder="1" min="1" max="31" value="{{ cv.rent_due_day or '' }}">
+            </div>
+
+            <div class="form-buttons">
+                <button type="submit">Save Changes</button>
+                <button type="button" class="btn-ai" onclick="aiPrefill(this)">🤖 Auto-fill using AI</button>
+                <a href="/" class="btn-cancel">Cancel</a>
+            </div>
+            <div class="ai-message"></div>
+        </form>
+    </div>
+
+    {% else %}
+    <!-- NO LEASE: Upload form + confirmation flow -->
+    {% if leases and leases|length > 0 %}
+    <div class="dashboard-nav">
+        <a href="/" class="dashboard-nav-link">
+            <span>←</span> Back
+        </a>
+    </div>
+    {% endif %}
+    <div class="upload-form">
+        {% if renew_from_lease %}
+        <h3>Upload Renewal Lease</h3>
+        <p class="renewal-context">Renewing: <strong>{{ renew_from_lease.lease_nickname or 'Untitled Lease' }}</strong> (Version {{ renew_from_lease.version or 1 }})</p>
+        <p>Supported formats: PDF, PNG, JPG, JPEG</p>
+        {% else %}
+        <h3>Upload Your Lease Document</h3>
+        <p>Supported formats: PDF, PNG, JPG, JPEG</p>
+        {% endif %}
+        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+            {% if renew_from %}
+            <input type="hidden" name="renew_from" value="{{ renew_from }}">
+            {% endif %}
+            <div class="upload-zone">
+                <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required>
+                <br>
+                <button type="submit">{% if renew_from %}Upload Renewal{% else %}Upload File{% endif %}</button>
+            </div>
+        </form>
+    </div>
+
+    {% if uploads %}
+    {% set latest = uploads | list | last %}
+    {% set data = uploads[latest] %}
+    <div class="uploads-section">
+        <h3>Uploaded File</h3>
+        <div class="upload-item">
+            <h4>{{ latest }}</h4>
+            <div class="file-type">Type: {{ data.mimetype }}</div>
+
+            <!-- Full extracted text reference -->
+            <div class="text-reference">
+                <label>Extracted Text (read-only reference)</label>
+                {% if data.extracted_text %}
+                    <textarea class="full-text-box" readonly>{{ data.extracted_text }}</textarea>
+                {% else %}
+                    <textarea class="full-text-box" readonly placeholder="No text extracted">{{ data.extracted_text or '' }}</textarea>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation form -->
+    <div class="confirm-form">
+        <h3>Confirm Lease Details</h3>
+        <p>Review the extracted text above and fill in the lease details below.</p>
+
+        <form action="{{ url_for('save_lease') }}" method="post">
+            <input type="hidden" name="source_filename" value="{{ latest }}">
+
+            <div class="form-group">
+                <label for="lease_nickname">Lease Nickname</label>
+                <input type="text" id="lease_nickname" name="lease_nickname" placeholder="e.g., Main Apartment">
+                <div class="ai-hint" id="nickname-ai-hint">Suggested by AI — you can edit this freely.</div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lessor_name">Lessor / Licensor Name</label>
+                    <input type="text" id="lessor_name" name="lessor_name" placeholder="Landlord name">
+                </div>
+                <div class="form-group">
+                    <label for="lessee_name">Lessee / Licensee Name</label>
+                    <input type="text" id="lessee_name" name="lessee_name" placeholder="Tenant name">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lease_start_date">Lease Start Date</label>
+                    <input type="date" id="lease_start_date" name="lease_start_date" value="" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="lease_end_date">Lease End Date</label>
+                    <input type="date" id="lease_end_date" name="lease_end_date" value="" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="monthly_rent">Monthly Rent</label>
+                    <input type="number" id="monthly_rent" name="monthly_rent" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="security_deposit">Security Deposit</label>
+                    <input type="number" id="security_deposit" name="security_deposit" placeholder="0" min="0">
+                </div>
+            </div>
+
+            <div class="form-group" style="max-width: 200px;">
+                <label for="rent_due_day">Rent Due Day (1-31)</label>
+                <input type="number" id="rent_due_day" name="rent_due_day" placeholder="1" min="1" max="31">
+            </div>
+
+            <div class="form-buttons">
+                <button type="submit">Save Lease Details</button>
+                <button type="button" class="btn-ai" onclick="aiPrefill(this)">🤖 Auto-fill using AI</button>
+            </div>
+            <div class="ai-message"></div>
+            <div class="ai-summary" id="ai-summary">
+                <div class="ai-summary-title">AI Assistance</div>
+                <ul>
+                    <li>Some fields were pre-filled using AI analysis of your document.</li>
+                    <li>You have full control — edit any value freely.</li>
+                    <li>Please review all fields before saving.</li>
+                </ul>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+    {% endif %}
+
+<script>
+// ========================================
+// AI AUTOFILL - TRANSPARENT OVERWRITE
+// ========================================
+
+// Track fields manually edited by the user (per form)
+const manuallyEditedFields = new WeakMap();
+
+// Field display names for user-friendly messages
+const FIELD_LABELS = {
+    'lease_nickname': 'Lease Nickname',
+    'lessor_name': 'Lessor Name',
+    'lessee_name': 'Lessee Name',
+    'lease_start_date': 'Start Date',
+    'lease_end_date': 'End Date',
+    'monthly_rent': 'Monthly Rent',
+    'security_deposit': 'Security Deposit',
+    'rent_due_day': 'Rent Due Day'
+};
+
+// List of all lease fields
+const LEASE_FIELDS = Object.keys(FIELD_LABELS);
+
+// Initialize edit tracking for a form
+function initEditTracking(form) {
+    if (!form || manuallyEditedFields.has(form)) return;
+
+    const editedSet = new Set();
+    manuallyEditedFields.set(form, editedSet);
+
+    LEASE_FIELDS.forEach(fieldName => {
+        const field = form.querySelector(`[name="${fieldName}"]`);
+        if (field) {
+            field.addEventListener('input', () => {
+                editedSet.add(fieldName);
+                field.classList.add('user-edited');
+                field.classList.remove('ai-filled');
+            });
+            field.addEventListener('change', () => {
+                editedSet.add(fieldName);
+                field.classList.add('user-edited');
+                field.classList.remove('ai-filled');
+            });
+        }
+    });
+}
+
+// Check if a field was manually edited
+function wasManuallyEdited(form, fieldName) {
+    const editedSet = manuallyEditedFields.get(form);
+    return editedSet ? editedSet.has(fieldName) : false;
+}
+
+// Get current field value
+function getFieldValue(form, fieldName) {
+    const field = form.querySelector(`[name="${fieldName}"]`);
+    return field ? field.value : '';
+}
+
+// Initialize tracking on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.confirm-form form').forEach(initEditTracking);
+});
+
+function aiPrefill(button) {
+    const form = button.closest('form');
+    const messageDiv = form.querySelector('.ai-message');
+
+    // Capture ALL prior values BEFORE AI updates (not just manually edited)
+    // This ensures renewal leases with pre-filled values are handled correctly
+    const priorValues = {};
+    LEASE_FIELDS.forEach(fieldName => {
+        priorValues[fieldName] = getFieldValue(form, fieldName);
+    });
+
+    // Show loading state
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = '⏳ Analyzing...';
+    messageDiv.className = 'ai-message loading visible';
+    messageDiv.textContent = 'AI is analyzing your lease document...';
+
+    // Get lease_id from the form (hidden input)
+    const leaseIdInput = form.querySelector('[name="lease_id"]');
+    const leaseId = leaseIdInput ? leaseIdInput.value : null;
+
+    if (!leaseId) {
+        messageDiv.className = 'ai-message error visible';
+        messageDiv.textContent = 'Error: No lease ID found. Please save the lease first.';
+        button.disabled = false;
+        button.textContent = originalText;
+        return;
+    }
+
+    fetch('/ai_prefill', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ lease_id: leaseId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        button.disabled = false;
+        button.textContent = originalText;
+
+        if (data.success) {
+            const d = data.data;
+            const updates = [];        // Fields that were actually changed
+            const overwrites = [];     // Fields that had prior values replaced
+            const unchanged = [];      // Fields where AI value matched existing
+
+            // Helper to safely extract value from AI response field
+            const getValue = (field) => {
+                if (field && typeof field === 'object' && field.value !== null && field.value !== undefined) {
+                    return String(field.value);
+                }
+                return null;
+            };
+
+            // Helper to mark field as AI-filled
+            const markAiFilled = (field) => {
+                if (!field) return;
+                field.classList.add('ai-filled');
+                field.classList.remove('user-edited');
+            };
+
+            // Helper to normalize values for comparison (handles type coercion)
+            const normalizeValue = (val) => {
+                if (val === null || val === undefined) return '';
+                return String(val).trim();
+            };
+
+            // Update a field: always apply AI value, track changes and overwrites
+            const updateField = (fieldName, newValue) => {
+                // Skip if AI returned null/undefined
+                if (newValue === null || newValue === undefined) return false;
+
+                const field = form.querySelector(`[name="${fieldName}"]`);
+                if (!field) return false;
+
+                const oldValue = priorValues[fieldName];
+                const normalizedOld = normalizeValue(oldValue);
+                const normalizedNew = normalizeValue(newValue);
+
+                // If values are identical, skip update but note it
+                if (normalizedOld === normalizedNew) {
+                    unchanged.push({
+                        fieldName: fieldName,
+                        label: FIELD_LABELS[fieldName]
+                    });
+                    return false;
+                }
+
+                // Apply the new value (AI always wins)
+                field.value = newValue;
+                markAiFilled(field);
+
+                // Store overwrite metadata on the field element
+                field.dataset.previousValue = oldValue;
+                field.dataset.overwriteSource = 'ai';
+                field.dataset.overwrittenAt = new Date().toISOString();
+
+                // Track this update
+                updates.push({
+                    fieldName: fieldName,
+                    label: FIELD_LABELS[fieldName],
+                    oldValue: oldValue,
+                    newValue: newValue
+                });
+
+                // If field had a prior non-empty value, track as overwrite
+                if (normalizedOld !== '') {
+                    overwrites.push({
+                        fieldName: fieldName,
+                        label: FIELD_LABELS[fieldName],
+                        oldValue: oldValue,
+                        newValue: newValue
+                    });
+                }
+
+                return true;
+            };
+
+            // Update ALL fields - AI always applies regardless of prior state
+            // lease_nickname has direct value (not nested)
+            if (d.lease_nickname) {
+                updateField('lease_nickname', d.lease_nickname);
+                const aiHint = form.querySelector('#nickname-ai-hint');
+                if (aiHint) aiHint.classList.add('visible');
+            }
+
+            // Other fields have nested structure {value, page, evidence}
+            updateField('lessor_name', getValue(d.lessor_name));
+            updateField('lessee_name', getValue(d.lessee_name));
+            updateField('lease_start_date', getValue(d.start_date));
+            updateField('lease_end_date', getValue(d.end_date));
+            updateField('monthly_rent', getValue(d.monthly_rent));
+            updateField('security_deposit', getValue(d.security_deposit));
+            updateField('rent_due_day', getValue(d.rent_due_day));
+
+            // Build summary message
+            let html = '';
+
+            if (updates.length > 0) {
+                html += `<div class="ai-update-summary">`;
+                html += `<strong>AI suggestions applied (${updates.length} field${updates.length !== 1 ? 's' : ''} updated):</strong>`;
+                html += `<ul class="ai-update-list">`;
+                updates.forEach(u => {
+                    html += `<li>${u.label}</li>`;
+                });
+                html += `</ul>`;
+                html += `</div>`;
+            }
+
+            if (overwrites.length > 0) {
+                html += `<div class="ai-overwrite-warning">`;
+                html += `<strong>Previous values replaced:</strong>`;
+                html += `<ul class="ai-overwrite-list">`;
+                overwrites.forEach(o => {
+                    const oldDisplay = o.oldValue || '(empty)';
+                    const newDisplay = o.newValue || '(empty)';
+                    html += `<li><span class="field-name">${o.label}:</span> `;
+                    html += `<span class="old-value">${escapeHtml(oldDisplay)}</span>`;
+                    html += ` <span class="arrow">→</span> `;
+                    html += `<span class="new-value">${escapeHtml(newDisplay)}</span></li>`;
+                });
+                html += `</ul>`;
+                html += `</div>`;
+            }
+
+            if (updates.length === 0) {
+                html = 'AI ran but no differences were found. All fields already match AI suggestions.';
+            }
+
+            messageDiv.className = 'ai-message success visible';
+            messageDiv.innerHTML = html;
+
+            // Show AI summary
+            const aiSummary = form.querySelector('#ai-summary');
+            if (aiSummary && updates.length > 0) aiSummary.classList.add('visible');
+        } else {
+            messageDiv.className = 'ai-message error visible';
+            messageDiv.textContent = data.error || 'AI extraction failed. Please fill in the fields manually.';
+        }
+    })
+    .catch(error => {
+        button.disabled = false;
+        button.textContent = originalText;
+        messageDiv.className = 'ai-message error visible';
+        messageDiv.textContent = 'Unable to connect to AI service. Please fill in the fields manually.';
+    });
+}
+</script>
+</div>
+
+<!-- DELETE CONFIRMATION MODAL -->
+<div class="delete-modal-overlay" id="deleteModal">
+    <div class="delete-modal">
+        <div class="delete-modal-header">
+            <h3 id="deleteModalTitle">Confirm Deletion</h3>
+        </div>
+        <div class="delete-modal-body">
+            <div class="delete-modal-warning">
+                <p>
+                    <strong>This action cannot be undone.</strong>
+                    Once deleted, all data associated with this lease will be permanently removed.
+                </p>
+            </div>
+            <div class="delete-modal-info" id="deleteModalInfo">
+                <!-- Filled by JavaScript -->
+            </div>
+            <div class="delete-modal-confirm">
+                <label id="deleteModalLabel">
+                    Type <code id="deleteConfirmText">DELETE</code> to confirm:
+                </label>
+                <input type="text" id="deleteConfirmInput" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+        <div class="delete-modal-footer">
+            <button type="button" class="delete-modal-cancel" onclick="closeDeleteModal()">Cancel</button>
+            <form id="deleteModalForm" action="/reset" method="post" style="margin: 0;">
+                <input type="hidden" name="lease_id" id="deleteLeaseId">
+                <input type="hidden" name="confirm_text" id="deleteConfirmHidden">
+                <input type="hidden" name="expected_text" id="deleteExpectedHidden">
+                <button type="submit" class="delete-modal-submit" id="deleteModalSubmit" disabled>
+                    Delete Permanently
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Delete modal state
+let deleteModalExpectedText = 'DELETE';
+
+function openDeleteModal(leaseId, leaseName, isGroupDelete) {
+    const modal = document.getElementById('deleteModal');
+    const titleEl = document.getElementById('deleteModalTitle');
+    const infoEl = document.getElementById('deleteModalInfo');
+    const labelEl = document.getElementById('deleteModalLabel');
+    const confirmTextEl = document.getElementById('deleteConfirmText');
+    const confirmInput = document.getElementById('deleteConfirmInput');
+    const leaseIdInput = document.getElementById('deleteLeaseId');
+    const expectedInput = document.getElementById('deleteExpectedHidden');
+    const submitBtn = document.getElementById('deleteModalSubmit');
+
+    // Reset state
+    confirmInput.value = '';
+    submitBtn.disabled = true;
+    leaseIdInput.value = leaseId;
+
+    if (isGroupDelete) {
+        // For entire lease group deletion, require typing the nickname
+        titleEl.textContent = 'Delete Entire Lease Group';
+        infoEl.innerHTML = 'You are about to delete <span class="lease-name">' + escapeHtml(leaseName) + '</span> and ALL its versions permanently.';
+        deleteModalExpectedText = leaseName;
+        confirmTextEl.textContent = leaseName;
+        labelEl.innerHTML = 'Type the lease name <code>' + escapeHtml(leaseName) + '</code> exactly to confirm:';
+    } else {
+        // For single lease/version deletion
+        titleEl.textContent = 'Delete Lease';
+        infoEl.innerHTML = 'You are about to delete <span class="lease-name">' + escapeHtml(leaseName || 'this lease') + '</span> permanently.';
+        deleteModalExpectedText = 'DELETE';
+        confirmTextEl.textContent = 'DELETE';
+        labelEl.innerHTML = 'Type <code>DELETE</code> to confirm:';
+    }
+
+    expectedInput.value = deleteModalExpectedText;
+    modal.classList.add('visible');
+    confirmInput.focus();
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+function openVersionDeleteModal(versionId, versionNumber, isCurrent, totalVersions) {
+    const modal = document.getElementById('deleteModal');
+    const titleEl = document.getElementById('deleteModalTitle');
+    const infoEl = document.getElementById('deleteModalInfo');
+    const labelEl = document.getElementById('deleteModalLabel');
+    const confirmTextEl = document.getElementById('deleteConfirmText');
+    const confirmInput = document.getElementById('deleteConfirmInput');
+    const leaseIdInput = document.getElementById('deleteLeaseId');
+    const expectedInput = document.getElementById('deleteExpectedHidden');
+    const submitBtn = document.getElementById('deleteModalSubmit');
+
+    // Reset state
+    confirmInput.value = '';
+    submitBtn.disabled = true;
+    leaseIdInput.value = versionId;
+
+    // Set title and info based on context
+    titleEl.textContent = 'Delete Lease Version';
+
+    let infoHtml = 'You are about to delete <span class="lease-name">Version ' + versionNumber + '</span>.';
+
+    if (totalVersions <= 1) {
+        // Last version - will delete entire lease
+        infoHtml += '<br><br><strong>Warning:</strong> This is the only version. Deleting it will remove the entire lease.';
+    } else if (isCurrent) {
+        // Current version - will revert to previous
+        infoHtml += '<br><br><strong>Note:</strong> This is the current version. The lease will revert to the previous version.';
+    }
+
+    infoEl.innerHTML = infoHtml;
+
+    // Always require "DELETE" for version deletion
+    deleteModalExpectedText = 'DELETE';
+    confirmTextEl.textContent = 'DELETE';
+    labelEl.innerHTML = 'Type <code>DELETE</code> to confirm:';
+    expectedInput.value = 'DELETE';
+
+    modal.classList.add('visible');
+    confirmInput.focus();
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Validate confirmation input
+document.getElementById('deleteConfirmInput').addEventListener('input', function(e) {
+    const submitBtn = document.getElementById('deleteModalSubmit');
+    const hiddenInput = document.getElementById('deleteConfirmHidden');
+    const inputValue = e.target.value;
+
+    hiddenInput.value = inputValue;
+
+    if (inputValue === deleteModalExpectedText) {
+        submitBtn.disabled = false;
+    } else {
+        submitBtn.disabled = true;
+    }
+});
+
+// Close modal on overlay click
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDeleteModal();
+    }
+});
+
+// Prevent form submission if button is disabled
+document.getElementById('deleteModalForm').addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('deleteModalSubmit');
+    if (submitBtn.disabled) {
+        e.preventDefault();
+        return false;
+    }
+    // Additional client-side validation
+    const confirmInput = document.getElementById('deleteConfirmInput').value;
+    if (confirmInput !== deleteModalExpectedText) {
+        e.preventDefault();
+        alert('Confirmation text does not match. Deletion aborted.');
+        return false;
+    }
+});
+</script>
+
+<!-- EXTRACTED TEXT MODAL -->
+<div class="text-modal-overlay" id="textModal">
+    <div class="text-modal">
+        <div class="text-modal-header">
+            <h3>Extracted Text</h3>
+            <button type="button" class="text-modal-close" onclick="closeTextModal()">Close</button>
+        </div>
+        <div class="text-modal-body">
+            <textarea readonly>{{ lease_data.source_document.extracted_text if lease_data and lease_data.source_document and lease_data.source_document.extracted_text else 'No extracted text available.' }}</textarea>
+        </div>
+    </div>
+</div>
+
+<script>
+function openTextModal() {
+    const modal = document.getElementById('textModal');
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeTextModal() {
+    const modal = document.getElementById('textModal');
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+// Close text modal when clicking outside
+document.getElementById('textModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeTextModal();
+    }
+});
+
+// Close text modal with Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const textModal = document.getElementById('textModal');
+        if (textModal && textModal.classList.contains('visible')) {
+            closeTextModal();
+        }
+    }
+});
+</script>
+</body>
+</html>

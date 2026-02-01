@@ -1,0 +1,204 @@
+PROJECT: Lease Reminder App
+STATUS: Post-Option B (Persistence & Safety), Pre-Option C (AI Explainability)
+
+OVERVIEW
+--------
+This is a Flask-based web app to upload, manage, and track multiple lease documents.
+The app supports AI-assisted extraction, manual editing, reminders, dashboards,
+landlord grouping, and global urgency indicators.
+
+This is NOT a prototype.
+This is an evolving production-grade app with real persistence and UX polish.
+
+DO NOT treat this as greenfield.
+
+
+CORE FEATURES IMPLEMENTED
+-------------------------
+
+1. MULTIPLE LEASE SUPPORT (COMPLETED)
+- Leases are stored as a collection in lease_data.json
+- Each lease has:
+  - UUID (id)
+  - created_at / updated_at timestamps
+  - Independent lease fields
+- Automatic migration from legacy single-lease format
+- Backward compatibility preserved
+
+Data structure:
+{
+  "leases": [
+    {
+      "id": "uuid",
+      "lease_nickname": "...",
+      "lessor_name": "...",
+      "lessee_name": "...",
+      "lease_start_date": "...",
+      "lease_end_date": "...",
+      "monthly_rent": "...",
+      "security_deposit": "...",
+      "rent_due_day": "...",
+      "source_filename": "...",
+      "created_at": "...",
+      "updated_at": "..."
+    }
+  ]
+}
+
+
+2. DASHBOARD-FIRST NAVIGATION (COMPLETED)
+- `/` shows dashboard with all leases
+- `/?lease_id=<uuid>` shows a specific lease
+- `/?new=true` opens upload flow
+- Dashboard contains:
+  - Lease cards
+  - Upload New Lease CTA
+  - Empty state when no leases exist
+
+
+3. UPLOAD FLOW (FIXED & CORRECT)
+- Uploading a lease:
+  1. Saves the file
+  2. Extracts text
+  3. Immediately creates a new lease entry with empty fields
+  4. Persists it to lease_data.json
+  5. Redirects user to that lease in EDIT mode
+
+This ensures a new dashboard card always appears after upload.
+
+
+4. AI EXTRACTION (WORKING)
+AI extracts the following fields conservatively:
+- Lessor / Licensor
+- Lessee / Licensee
+- Lease start date
+- Lease end date
+- Monthly rent
+- Security deposit
+- Rent due day
+- Lease nickname (AI-generated from context)
+
+Rules:
+- Return null if unclear
+- Normalize dates (YYYY-MM-DD)
+- Normalize monetary values
+- Include evidence snippets (textual, not yet page/clauses)
+- AI runs only on explicit user action
+
+
+5. LEASE DETAIL VIEW (POLISHED)
+Lease details are visually grouped:
+- Parties
+- Key Dates
+- Financials
+- Metadata
+
+Styling rules:
+- Dates emphasized
+- Money values monospace
+- Labels muted, values dominant
+- Clean hierarchy inside a single card
+
+
+6. REMINDER ENGINE (BACKEND COMPLETE)
+Backend calculates urgency for:
+- Lease expiry
+- Rent payment
+
+Urgency levels:
+- none
+- info
+- warning
+- urgent
+- critical
+
+Days remaining and messages are calculated server-side
+and passed to templates.
+
+
+7. VISUAL URGENCY (UI COMPLETE)
+- Color, border, and shadow intensity increase with urgency
+- Applied consistently to:
+  - Reminder cards
+  - Lease cards on dashboard
+- No icons used outside reminders
+- Styling is subtle, professional, and non-alarming unless critical
+
+
+8. LANDLORD GROUPING (COMPLETED)
+- Dashboard groups leases by lessor_name
+- Alphabetical ordering
+- "Unknown Landlord" group for missing data
+- Multiple landlords shown on the same page
+
+
+9. GLOBAL LANDLORD TICKER (COMPLETED)
+- A global urgency/ticker component exists on the dashboard
+- It summarizes critical and urgent issues across ALL landlords
+- Triggered at page load
+- Designed to surface:
+  - Overdue rent
+  - Imminent lease expiries
+- This feature is implemented and functional
+- Further UX refinement may occur, but core behavior exists
+
+
+10. PERSISTENCE & SAFETY (OPTION B COMPLETED)
+- Atomic file writes
+- Safe load/save helpers
+- Lease-level deletion (not global reset)
+- Reduced risk of data loss or corruption
+
+
+11. UI LOOK & FEEL (POLISHED)
+- Card-based layout
+- Subtle gradient background
+- Modern typography
+- Soft shadows
+- Responsive behavior
+- Production-quality appearance
+
+
+KNOWN DEFERRED ITEMS (TRACKED, NOT IMPLEMENTED)
+-----------------------------------------------
+
+1. OPTION C — AI EXPLAINABILITY (NOT STARTED)
+AI must provide:
+- Clause reference
+- Page number
+- Source trace per extracted field
+
+UI must display this clearly per field.
+This is the next major feature to implement.
+
+
+2. REMINDER SEMANTICS TWEAK
+- Warning should only appear when overdue
+- “Urgent” should be used for upcoming deadlines
+- Requires backend logic changes
+- Intentionally deferred
+
+
+CURRENT POSITION
+----------------
+- Option B fully complete
+- Global landlord ticker exists
+- App is stable and coherent
+- No partial or unsafe changes pending
+
+NEXT START POINT
+----------------
+Resume from:
+"Option C — AI Explainability (Step 1)"
+
+Assume:
+- Multiple landlords
+- Multiple leases
+- Persistent data
+- Active dashboard and ticker
+
+DO NOT:
+- Rewrite the app
+- Remove features
+- Break migrations
+- Simplify existing logic

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+venv/
+*.pyc
+
+# Uploaded files
+uploads/
+
+# Local data
+lease_data.json
+
+# OS
+.DS_Store
