@@ -40,6 +40,19 @@ def days_until_filter(date_str):
     except ValueError:
         return None
 
+@app.template_filter('format_money')
+def format_money_filter(value):
+    """Format a numeric value with commas for display (e.g. 185000 → 185,000)."""
+    if value is None:
+        return '—'
+    try:
+        num = float(value)
+        if num == int(num):
+            return f"{int(num):,}"
+        return f"{num:,.2f}"
+    except (ValueError, TypeError):
+        return str(value)
+
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
@@ -609,6 +622,12 @@ def create_lease_renewal(original_lease_id):
             "monthly_rent": orig_cv.get("monthly_rent"),
             "security_deposit": orig_cv.get("security_deposit"),
             "rent_due_day": orig_cv.get("rent_due_day"),
+            "lock_in_period": {
+                "duration_months": None
+            },
+            "renewal_terms": {
+                "rent_escalation_percent": None
+            },
         },
     }
 
@@ -1517,6 +1536,18 @@ def ai_prefill():
     if extracted_text:
         print(f"[DIAG] Text length for AI: {len(extracted_text)} chars", flush=True)
         print(f"[DIAG] First 500 chars for AI: {extracted_text[:500]}", flush=True)
+
+    # Check if the original document is missing (legacy lease)
+    file_missing = (
+        not source_doc.get("filename")
+        or not os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], source_doc.get("filename", "")))
+    )
+    if not extracted_text and file_missing:
+        return jsonify({
+            "success": False,
+            "error_code": "no_document",
+            "error": "This lease was created before document storage was enabled. The original PDF is no longer available."
+        })
 
     if not extracted_text:
         return jsonify({

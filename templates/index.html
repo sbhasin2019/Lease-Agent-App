@@ -576,6 +576,122 @@
             font-size: 12px;
         }
 
+        /* Unified changes section (Previous values replaced) */
+        .unified-changes-container {
+            margin-top: 16px;
+        }
+        .unified-changes {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px 18px;
+        }
+        .unified-changes h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .changes-list {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+            font-size: 13px;
+        }
+        .changes-list li {
+            margin-bottom: 6px;
+            padding: 8px 12px;
+            background: #fff;
+            border: 1px solid #f0f0f0;
+            border-radius: 6px;
+            line-height: 1.7;
+        }
+        .changes-list li:last-child {
+            margin-bottom: 0;
+        }
+        .changes-list .field-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .changes-list .old-value {
+            color: #b91c1c;
+            text-decoration: line-through;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+        }
+        .changes-list .arrow {
+            color: #9ca3af;
+            margin: 0 4px;
+        }
+        .changes-list .new-value {
+            color: #166534;
+            font-weight: 500;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+        }
+        .source-tag {
+            display: inline-block;
+            font-size: 11px;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            font-weight: 500;
+            vertical-align: middle;
+        }
+        .source-ai {
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+        .source-version {
+            background: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+
+        /* Version changes in View Mode */
+        .btn-toggle-changes {
+            display: inline-block;
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+        .btn-toggle-changes:hover {
+            background: #dbeafe;
+        }
+        .change-old,
+        .change-removed {
+            color: #b91c1c;
+            text-decoration: line-through;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+        }
+        .change-arrow {
+            color: #9ca3af;
+            margin: 0 6px;
+        }
+        .change-new,
+        .change-added {
+            color: #1e40af;
+            font-weight: 600;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+        }
+        .change-note {
+            color: #6b7280;
+            font-style: italic;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+
         /* Reminder urgency styles */
         .reminder-card {
             background: #fff;
@@ -1110,6 +1226,92 @@
         }
         .delete-trigger {
             cursor: pointer;
+        }
+
+        /* ========================================
+           MISSING DOCUMENT MODAL (legacy lease)
+           ======================================== */
+        .missing-doc-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .missing-doc-overlay.visible {
+            display: flex;
+        }
+        .missing-doc-modal {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 480px;
+            width: 90%;
+            overflow: hidden;
+        }
+        .missing-doc-header {
+            background: #eff6ff;
+            border-bottom: 1px solid #bfdbfe;
+            padding: 20px 24px;
+        }
+        .missing-doc-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e40af;
+        }
+        .missing-doc-body {
+            padding: 24px;
+        }
+        .missing-doc-body p {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.6;
+        }
+        .missing-doc-body p:last-child {
+            margin-bottom: 0;
+        }
+        .missing-doc-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .missing-doc-close {
+            padding: 12px 24px;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .missing-doc-close:hover {
+            background: #f3f4f6;
+        }
+        .missing-doc-action {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .missing-doc-action:hover {
+            background: #1d4ed8;
         }
 
         /* ========================================
@@ -1845,7 +2047,7 @@
                             </div>
                             <div class="lease-card-meta-row">
                                 <span class="lease-card-meta-label">Monthly Rent</span>
-                                <span class="lease-card-meta-value rent">{% if lcv.monthly_rent %}₹{{ lcv.monthly_rent }}{% else %}—{% endif %}</span>
+                                <span class="lease-card-meta-value rent">{% if lcv.monthly_rent %}₹{{ lcv.monthly_rent | format_money }}{% else %}—{% endif %}</span>
                             </div>
                         </div>
                         {% if days_remaining is not none %}
@@ -1986,11 +2188,11 @@
             <h4 class="details-group-header">Financials</h4>
             <div class="field-row">
                 <span class="field-label">Monthly Rent</span>
-                <span class="field-value value-money">{% if cv.monthly_rent %}₹{{ cv.monthly_rent }}{% else %}—{% endif %}</span>
+                <span class="field-value value-money">{% if cv.monthly_rent %}₹{{ cv.monthly_rent | format_money }}{% else %}—{% endif %}</span>
             </div>
             <div class="field-row">
                 <span class="field-label">Security Deposit</span>
-                <span class="field-value value-money">{% if cv.security_deposit %}₹{{ cv.security_deposit }}{% else %}—{% endif %}</span>
+                <span class="field-value value-money">{% if cv.security_deposit %}₹{{ cv.security_deposit | format_money }}{% else %}—{% endif %}</span>
             </div>
         </div>
 
@@ -2010,7 +2212,7 @@
         <!-- SECTION E: Changes from Previous Version (only for renewals) -->
         {% if version_changes and version_changes|length > 0 %}
         <button type="button" class="btn-toggle-changes" onclick="toggleVersionChanges()">
-            View changes from previous version ({{ version_changes|length }})
+            View changes from previous version
         </button>
         <div class="details-group version-changes" id="versionChangesSection" style="display: none;">
             <h4 class="details-group-header">Changes from Previous Version</h4>
@@ -2019,15 +2221,15 @@
                 <span class="field-label">{{ change.label }}</span>
                 <span class="field-value">
                     {% if change.change_type == 'added' %}
-                        <span class="change-added">{{ change.new_value }}</span>
+                        <span class="change-added">{{ change.new_value | format_money }}</span>
                         <span class="change-note">(new)</span>
                     {% elif change.change_type == 'removed' %}
-                        <span class="change-removed">{{ change.old_value or '—' }}</span>
+                        <span class="change-removed">{{ (change.old_value or '—') | format_money }}</span>
                         <span class="change-note">(removed)</span>
                     {% else %}
-                        <span class="change-old">{{ change.old_value or '—' }}</span>
+                        <span class="change-old">{{ (change.old_value or '—') | format_money }}</span>
                         <span class="change-arrow">→</span>
-                        <span class="change-new">{{ change.new_value or '—' }}</span>
+                        <span class="change-new">{{ (change.new_value or '—') | format_money }}</span>
                     {% endif %}
                 </span>
             </div>
@@ -2080,19 +2282,19 @@
                 <div class="version-details">
                     <div class="version-detail">
                         <span class="version-detail-label">Start:</span>
-                        <span class="version-detail-value">{{ version.lease_start_date or '—' }}</span>
+                        <span class="version-detail-value">{{ (version.current_values.lease_start_date if version.current_values) or '—' }}</span>
                     </div>
                     <div class="version-detail">
                         <span class="version-detail-label">End:</span>
-                        <span class="version-detail-value">{{ version.lease_end_date or '—' }}</span>
+                        <span class="version-detail-value">{{ (version.current_values.lease_end_date if version.current_values) or '—' }}</span>
                     </div>
                     <div class="version-detail">
                         <span class="version-detail-label">File:</span>
-                        <span class="version-detail-value">{{ version.source_filename or '—' }}</span>
+                        <span class="version-detail-value">{{ (version.source_document.filename if version.source_document) or '—' }}</span>
                     </div>
                 </div>
                 <span class="version-status {% if version.is_current %}current{% else %}previous{% endif %}">
-                    {% if version.is_current %}Current{% else %}Previous{% endif %}
+                    {% if version.is_current %}Current / Latest{% else %}Previous{% endif %}
                 </span>
                 <div class="version-actions">
                     {% if version.id == lease_data.id %}
@@ -2588,6 +2790,13 @@ function aiPrefill(button) {
             // Show AI summary
             const aiSummary = form.querySelector('#ai-summary');
             if (aiSummary && updates.length > 0) aiSummary.classList.add('visible');
+        } else if (data.error_code === 'no_document') {
+            // Legacy lease with no PDF — show informational modal instead of error
+            messageDiv.className = 'ai-message';
+            messageDiv.textContent = '';
+            var reuploadLink = document.getElementById('reuploadLeaseLink');
+            if (reuploadLink) reuploadLink.href = '/?new=true&renew_from=' + encodeURIComponent(leaseId);
+            document.getElementById('missingDocumentModal').classList.add('visible');
         } else {
             messageDiv.className = 'ai-message error visible';
             messageDiv.textContent = data.error || 'AI extraction failed. Please fill in the fields manually.';
@@ -2608,10 +2817,10 @@ function toggleVersionChanges() {
     if (section) {
         if (section.style.display === 'none') {
             section.style.display = 'block';
-            if (button) button.textContent = button.textContent.replace('View', 'Hide');
+            if (button) button.textContent = 'Hide changes from previous version';
         } else {
             section.style.display = 'none';
-            if (button) button.textContent = button.textContent.replace('Hide', 'View');
+            if (button) button.textContent = 'View changes from previous version';
         }
     }
 }
@@ -2647,6 +2856,15 @@ function initUnifiedChanges(form) {
     }
 }
 
+// Format monetary values with commas for display
+const MONEY_FIELDS = ['monthly_rent', 'security_deposit'];
+function formatMoney(value) {
+    if (value === null || value === undefined || value === '' || value === '(empty)') return value;
+    const num = Number(value);
+    if (isNaN(num)) return value;
+    return Number.isInteger(num) ? num.toLocaleString() : num.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
 // Render unified changes display
 function renderUnifiedChanges(changesMap, container) {
     if (!container) return;
@@ -2665,8 +2883,9 @@ function renderUnifiedChanges(changesMap, container) {
     html += '<ul class="changes-list">';
 
     changes.forEach(c => {
-        const oldDisplay = c.oldValue || '(empty)';
-        const newDisplay = c.newValue || '(empty)';
+        const isMoney = MONEY_FIELDS.includes(c.field);
+        const oldDisplay = isMoney ? formatMoney(c.oldValue || '(empty)') : (c.oldValue || '(empty)');
+        const newDisplay = isMoney ? formatMoney(c.newValue || '(empty)') : (c.newValue || '(empty)');
         const sourceTag = c.source === 'ai' ? 'Updated by AI' : 'Changed from previous version';
         const sourceClass = c.source === 'ai' ? 'source-ai' : 'source-version';
 
@@ -2724,6 +2943,29 @@ let unifiedChangesMap = {};
         </div>
     </div>
 </div>
+
+<!-- MISSING DOCUMENT MODAL (legacy lease) -->
+<div class="missing-doc-overlay" id="missingDocumentModal">
+    <div class="missing-doc-modal">
+        <div class="missing-doc-header">
+            <h3>Lease Document Needed</h3>
+        </div>
+        <div class="missing-doc-body">
+            <p>This lease was added earlier, and the original document isn't available in the app anymore. Because of this, AI can't review the lease automatically.</p>
+            <p>If you upload the lease document again, the app will save it properly and AI features will work as expected.</p>
+        </div>
+        <div class="missing-doc-footer">
+            <button type="button" class="missing-doc-close" onclick="closeMissingDocumentModal()">Close</button>
+            <a id="reuploadLeaseLink" href="#" class="missing-doc-action">Upload Lease Document</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function closeMissingDocumentModal() {
+    document.getElementById('missingDocumentModal').classList.remove('visible');
+}
+</script>
 
 <script>
 // Delete modal state
