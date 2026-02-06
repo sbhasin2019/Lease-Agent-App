@@ -2,6 +2,16 @@
 PROJECT: Lease Management & Renewal Assistant (Single-User MVP)
 ----------------------------------------------------------------
 
+------------------------------------------------------------------
+NOTE ON NAMING:
+------------------------------------------------------------------
+
+The user-facing product name is **Easemylease**.
+This Project Context may continue to refer to the app descriptively
+as a “Lease Management & Renewal Assistant” to focus on behavior
+and architecture rather than branding.
+
+
 OVERVIEW
 This is a local, single-user Flask web app for managing property lease documents.
 

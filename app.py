@@ -1,5 +1,5 @@
 """
-Lease Reminder App - Main Application
+Easemylease - Main Application
 A simple local web app to extract and display lease information.
 """
 
