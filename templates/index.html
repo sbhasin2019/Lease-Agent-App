@@ -281,6 +281,12 @@
         .user-edited:focus {
             background-color: #fff !important;
         }
+        .field-explanation {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 3px;
+            font-style: italic;
+        }
         /* AI Assistance summary card */
         .ai-summary {
             display: none;
@@ -524,6 +530,43 @@
         }
         .ai-update-list li {
             margin-bottom: 2px;
+        }
+
+        /* AI Not-Filled Summary */
+        .ai-notfilled-summary {
+            margin-top: 14px;
+            padding: 10px 14px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+        }
+        .ai-notfilled-summary strong {
+            display: block;
+            margin-bottom: 6px;
+            color: #92400e;
+            font-size: 13px;
+        }
+        .ai-notfilled-list {
+            margin: 0;
+            padding-left: 20px;
+            font-size: 13px;
+            color: #92400e;
+        }
+        .ai-notfilled-list li {
+            margin-bottom: 8px;
+        }
+        .ai-notfilled-reason {
+            display: block;
+            font-size: 12px;
+            color: #b45309;
+            margin-top: 2px;
+            padding-left: 4px;
+        }
+        .ai-ocr-note {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6b7280;
+            font-style: italic;
         }
 
         /* AI Overwrite Warning */
@@ -1315,6 +1358,225 @@
         }
 
         /* ========================================
+           AI SUGGESTIONS PREVIEW MODAL
+           ======================================== */
+        .ai-preview-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-preview-overlay.visible {
+            display: flex;
+        }
+        .ai-preview-modal {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 640px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .ai-preview-header {
+            background: #f5f3ff;
+            border-bottom: 1px solid #ddd6fe;
+            padding: 20px 24px;
+        }
+        .ai-preview-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #5b21b6;
+        }
+        .ai-preview-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .ai-preview-note {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0 0 16px 0;
+            font-style: italic;
+        }
+        .ai-preview-field {
+            margin-bottom: 16px;
+        }
+        .ai-preview-field:last-child {
+            margin-bottom: 0;
+        }
+        .ai-preview-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        .ai-preview-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #374151;
+            background-color: #eff6ff;
+            box-sizing: border-box;
+        }
+        .ai-preview-input:focus {
+            outline: none;
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .ai-preview-input.preview-edited {
+            background-color: #fefce8;
+            border-color: #fde68a;
+        }
+        .ai-preview-input.preview-edited:focus {
+            border-color: #fbbf24;
+            box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+        }
+        .ai-preview-hint {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 3px;
+        }
+        .ai-preview-notfound-section {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .ai-preview-notfound-heading {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b7280;
+            margin: 0 0 4px 0;
+        }
+        .ai-preview-notfound-reason {
+            font-size: 12px;
+            color: #9ca3af;
+            margin: 0 0 16px 0;
+            font-style: italic;
+        }
+        .ai-preview-input.preview-notfound {
+            background-color: #fff;
+            border-color: #d1d5db;
+        }
+        .ai-preview-input.preview-notfound:focus {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .ai-preview-input.preview-notfound.preview-edited {
+            background-color: #fefce8;
+            border-color: #fde68a;
+        }
+        .ai-preview-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .ai-preview-cancel {
+            padding: 12px 24px;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .ai-preview-cancel:hover {
+            background: #f3f4f6;
+        }
+        .ai-preview-apply {
+            padding: 12px 24px;
+            background: #6f42c1;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .ai-preview-apply:hover {
+            background: #5a32a3;
+        }
+        .ai-preview-pdf {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .ai-preview-pdf:hover {
+            background: #1d4ed8;
+        }
+
+        /* ========================================
+           GLOBAL LOADING OVERLAY
+           ======================================== */
+        .global-loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            z-index: 900;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .global-loading-overlay.visible {
+            display: flex;
+        }
+        .global-loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #6f42c1;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .global-loading-message {
+            font-size: 15px;
+            color: #374151;
+            font-weight: 500;
+        }
+        .loading-card {
+            background: white;
+            padding: 32px 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+            text-align: center;
+            max-width: 360px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        /* ========================================
            EXTRACTED TEXT MODAL
            ======================================== */
         .text-modal-overlay {
@@ -1445,6 +1707,12 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 4px;
+        }
+        .lease-added-date {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-top: -12px;
+            margin-bottom: 20px;
         }
 
         /* Section group container */
@@ -2049,6 +2317,10 @@
                                 <span class="lease-card-meta-label">Monthly Rent</span>
                                 <span class="lease-card-meta-value rent">{% if lcv.monthly_rent %}₹{{ lcv.monthly_rent | format_money }}{% else %}—{% endif %}</span>
                             </div>
+                            <div class="lease-card-meta-row">
+                                <span class="lease-card-meta-label">Added</span>
+                                <span class="lease-card-meta-value">{{ lease.created_at | format_date }}</span>
+                            </div>
                         </div>
                         {% if days_remaining is not none %}
                         <div class="lease-card-urgency {% if days_remaining < 0 %}expired{% elif days_remaining <= 10 %}critical{% elif days_remaining <= 30 %}warning{% else %}positive{% endif %}">
@@ -2064,7 +2336,7 @@
                     <div class="lease-card-actions">
                         <a href="/?lease_id={{ lease.id }}" class="btn-view-lease">View Lease</a>
                         <button type="button" class="btn-delete-lease delete-trigger"
-                                onclick="openDeleteModal('{{ lease.id }}', '{{ lcv.lease_nickname|e if lcv.lease_nickname else 'Untitled Lease' }}', false)">
+                                onclick="openDeleteModal('{{ lease.id }}', '{{ lcv.lease_nickname|e if lcv.lease_nickname else 'Untitled Lease' }}', true)">
                             Delete
                         </button>
                     </div>
@@ -2152,6 +2424,8 @@
             <span class="lease-title-label">Lease Nickname</span>
             {{ cv.lease_nickname or 'Untitled Lease' }}
         </div>
+
+        <div class="lease-added-date">Lease added on: {{ lease_data.created_at | format_date }}</div>
 
         <!-- SECTION A: Parties -->
         <div class="details-group">
@@ -2394,6 +2668,7 @@
             <div class="form-buttons">
                 <button type="submit">Save Changes</button>
                 <button type="button" class="btn-ai" onclick="aiPrefill(this)">🤖 Auto-fill using AI</button>
+                <button type="button" class="btn-ai" id="btnReturnPreview" style="display:none;" onclick="reopenAiPreview()">Return to AI Preview</button>
                 <a href="/" class="btn-cancel">Cancel</a>
             </div>
             <div class="ai-message"></div>
@@ -2555,6 +2830,442 @@ const FIELD_LABELS = {
 // List of all lease fields
 const LEASE_FIELDS = Object.keys(FIELD_LABELS);
 
+// Money fields (for display formatting in preview)
+const MONEY_PREVIEW_FIELDS = ['monthly_rent', 'security_deposit'];
+
+// AI suggestions waiting for user review (not yet applied to form)
+let pendingSuggestions = {};
+
+// Reference to the form that triggered AI (needed by applyAiPreview)
+let aiPreviewSourceForm = null;
+
+// Whether AI has been applied (prevents re-running)
+let aiHasBeenApplied = false;
+
+// Snapshot of accepted preview state (for reopening preview later)
+let acceptedPreviewState = {};
+
+// Track which fields the user edited inside the preview modal
+let previewEditedFields = new Set();
+
+// Fields AI did not return a suggestion for (with reason)
+let aiNotFilledFields = [];
+let aiNotFilledReason = '';
+
+// Global loading overlay control
+function setLoading(isLoading, message) {
+    const overlay = document.getElementById('globalLoadingOverlay');
+    const msgEl = document.getElementById('globalLoadingMessage');
+    if (isLoading) {
+        msgEl.textContent = message || '';
+        overlay.classList.add('visible');
+    } else {
+        overlay.classList.remove('visible');
+        msgEl.textContent = '';
+    }
+}
+
+// Open AI Suggestions Preview Modal
+function openAiPreviewModal(form) {
+    const keys = Object.keys(pendingSuggestions);
+    if (keys.length === 0) return; // Nothing to preview
+
+    aiPreviewSourceForm = form;
+    previewEditedFields = new Set();
+
+    const container = document.getElementById('aiPreviewFields');
+    container.innerHTML = '';
+
+    keys.forEach(fieldName => {
+        const s = pendingSuggestions[fieldName];
+
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'ai-preview-field';
+
+        const label = document.createElement('div');
+        label.className = 'ai-preview-label';
+        label.textContent = s.label;
+        fieldDiv.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'ai-preview-input';
+        input.dataset.fieldName = fieldName;
+        input.value = s.newValue;
+
+        // Track edits: change background when user modifies the input
+        input.addEventListener('input', function() {
+            previewEditedFields.add(fieldName);
+            input.classList.add('preview-edited');
+        });
+
+        fieldDiv.appendChild(input);
+
+        // Show "Previously entered" hint ONLY if the field had a value before
+        if (s.oldValue && s.oldValue.trim() !== '') {
+            const hint = document.createElement('div');
+            hint.className = 'ai-preview-hint';
+            hint.textContent = 'Previously entered: ' + s.oldValue;
+            fieldDiv.appendChild(hint);
+        }
+
+        container.appendChild(fieldDiv);
+    });
+
+    // Render "not found" fields section (empty inputs for user to fill manually)
+    if (aiNotFilledFields.length > 0) {
+        const section = document.createElement('div');
+        section.className = 'ai-preview-notfound-section';
+
+        const heading = document.createElement('div');
+        heading.className = 'ai-preview-notfound-heading';
+        heading.textContent = 'Fields not found by AI';
+        section.appendChild(heading);
+
+        if (aiNotFilledReason) {
+            const reasonEl = document.createElement('div');
+            reasonEl.className = 'ai-preview-notfound-reason';
+            reasonEl.textContent = aiNotFilledReason;
+            section.appendChild(reasonEl);
+        }
+
+        aiNotFilledFields.forEach(f => {
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'ai-preview-field';
+
+            const label = document.createElement('div');
+            label.className = 'ai-preview-label';
+            label.textContent = f.label;
+            fieldDiv.appendChild(label);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'ai-preview-input preview-notfound';
+            input.dataset.fieldName = f.fieldName;
+            input.dataset.notFound = 'true';
+            input.value = '';
+            input.placeholder = 'Enter manually if known';
+
+            input.addEventListener('input', function() {
+                previewEditedFields.add(f.fieldName);
+                input.classList.add('preview-edited');
+            });
+
+            fieldDiv.appendChild(input);
+            section.appendChild(fieldDiv);
+        });
+
+        container.appendChild(section);
+    }
+
+    // Set PDF link using the filename already available on the page
+    const pdfLink = document.getElementById('aiPreviewPdfLink');
+    const filename = '{{ lease_data.source_document.filename if lease_data and lease_data.source_document and lease_data.source_document.filename else "" }}';
+    if (filename) {
+        pdfLink.href = '/view_pdf/' + encodeURIComponent(filename);
+        pdfLink.style.display = '';
+    } else {
+        pdfLink.style.display = 'none';
+    }
+
+    document.getElementById('aiPreviewModal').classList.add('visible');
+}
+
+// Close AI Suggestions Preview Modal (Cancel — discard everything)
+function closeAiPreviewModal() {
+    document.getElementById('aiPreviewModal').classList.remove('visible');
+    aiPreviewSourceForm = null;
+    previewEditedFields = new Set();
+}
+
+// Apply Changes: write preview values into the real form
+function applyAiPreview() {
+    if (!aiPreviewSourceForm) return;
+
+    const form = aiPreviewSourceForm;
+    const inputs = document.querySelectorAll('#aiPreviewFields .ai-preview-input');
+
+    // Track the four cases for the post-apply summary
+    const caseA = []; // AI suggested, accepted unchanged
+    const caseB = []; // AI suggested, user edited
+    const caseC = []; // AI did not suggest, user entered manually
+    const caseD = []; // AI did not suggest, still empty
+
+    inputs.forEach(input => {
+        const fieldName = input.dataset.fieldName;
+        const previewValue = input.value.trim();
+        const isNotFound = input.dataset.notFound === 'true';
+        const field = form.querySelector('[name="' + fieldName + '"]');
+        if (!field) return;
+
+        const label = isNotFound
+            ? (aiNotFilledFields.find(f => f.fieldName === fieldName) || {}).label || fieldName
+            : pendingSuggestions[fieldName].label;
+
+        if (isNotFound) {
+            // Field AI did NOT suggest
+            if (previewValue === '') {
+                // Case D: still empty
+                caseD.push(label);
+                field.dataset.aiNotFound = 'true';
+            } else {
+                // Case C: user entered manually
+                caseC.push(label);
+                field.value = previewValue;
+                delete field.dataset.aiNotFound;
+                field.classList.add('user-edited');
+                field.classList.remove('ai-filled');
+                field.dataset.overwriteSource = 'user';
+                field.dataset.previousValue = '';
+                field.dataset.overwrittenAt = new Date().toISOString();
+
+                // Add to unified changes map (renewals only)
+                if (parseInt(form.dataset.leaseVersion) > 1) {
+                    unifiedChangesMap[fieldName] = {
+                        field: fieldName,
+                        label: label,
+                        oldValue: '',
+                        newValue: previewValue,
+                        changeType: 'added',
+                        source: 'user'
+                    };
+                }
+            }
+        } else {
+            // Field AI DID suggest
+            if (previewValue === '') return; // User cleared it — skip
+
+            const oldValue = pendingSuggestions[fieldName].oldValue;
+            const wasEdited = previewEditedFields.has(fieldName);
+
+            // Write value into the real form
+            field.value = previewValue;
+            delete field.dataset.aiNotFound;
+
+            if (wasEdited && previewValue === pendingSuggestions[fieldName].newValue && acceptedPreviewState[fieldName] && acceptedPreviewState[fieldName].source === 'user') {
+                // Case B-revert: user reverted back to the AI-suggested value
+                caseA.push(label);
+                field.classList.add('ai-filled');
+                field.classList.remove('user-edited');
+                field.dataset.overwriteSource = 'ai';
+                field.dataset.aiSuggestedValue = pendingSuggestions[fieldName].newValue;
+                field.dataset.revertedToAi = 'true';
+                field.dataset.previousUserValue = acceptedPreviewState[fieldName].value;
+            } else if (wasEdited) {
+                // Case B: AI suggested, user edited
+                caseB.push(label);
+                field.classList.add('user-edited');
+                field.classList.remove('ai-filled');
+                field.dataset.overwriteSource = 'ai';
+                field.dataset.aiSuggestedValue = pendingSuggestions[fieldName].newValue;
+            } else {
+                // Case A: AI suggested, accepted unchanged
+                caseA.push(label);
+                field.classList.add('ai-filled');
+                field.classList.remove('user-edited');
+                field.dataset.overwriteSource = 'ai';
+                field.dataset.aiSuggestedValue = pendingSuggestions[fieldName].newValue;
+            }
+
+            // Set overwrite metadata
+            field.dataset.previousValue = oldValue;
+            field.dataset.overwrittenAt = new Date().toISOString();
+
+            // Update unified changes map (renewals only)
+            if (parseInt(form.dataset.leaseVersion) > 1) {
+                const existingChange = unifiedChangesMap[fieldName];
+                if (existingChange) {
+                    existingChange.newValue = previewValue;
+                    existingChange.source = wasEdited ? 'user' : 'ai';
+                } else {
+                    unifiedChangesMap[fieldName] = {
+                        field: fieldName,
+                        label: label,
+                        oldValue: oldValue,
+                        newValue: previewValue,
+                        changeType: oldValue ? 'changed' : 'added',
+                        source: wasEdited ? 'user' : 'ai'
+                    };
+                }
+            }
+        }
+    });
+
+    // Re-render unified changes (renewals only)
+    if (parseInt(form.dataset.leaseVersion) > 1) {
+        const unifiedContainer = form.parentElement.querySelector('#unifiedChanges');
+        renderUnifiedChanges(unifiedChangesMap, unifiedContainer);
+    }
+
+    // Render inline explanations under each field
+    LEASE_FIELDS.forEach(fieldName => {
+        const field = form.querySelector('[name="' + fieldName + '"]');
+        if (field) renderFieldExplanation(field);
+    });
+
+    // Detailed AI summary intentionally disabled in favor of inline field explanations
+    // The Case A/B/C/D summary logic is preserved below for possible future use.
+    //
+    // let summaryHtml = '';
+    //
+    // if (caseA.length > 0) {
+    //     summaryHtml += '<div class="ai-update-summary"><strong>Filled by AI:</strong>';
+    //     summaryHtml += '<ul class="ai-update-list">';
+    //     caseA.forEach(l => { summaryHtml += '<li>' + l + '</li>'; });
+    //     summaryHtml += '</ul></div>';
+    // }
+    //
+    // if (caseB.length > 0) {
+    //     summaryHtml += '<div class="ai-update-summary"><strong>AI suggested a value, which was modified by the user:</strong>';
+    //     summaryHtml += '<ul class="ai-update-list">';
+    //     caseB.forEach(l => { summaryHtml += '<li>' + l + '</li>'; });
+    //     summaryHtml += '</ul></div>';
+    // }
+    //
+    // if (caseC.length > 0) {
+    //     summaryHtml += '<div class="ai-update-summary"><strong>AI did not find a value; entered manually by the user:</strong>';
+    //     summaryHtml += '<ul class="ai-update-list">';
+    //     caseC.forEach(l => { summaryHtml += '<li>' + l + '</li>'; });
+    //     summaryHtml += '</ul></div>';
+    // }
+    //
+    // if (caseD.length > 0) {
+    //     const reason = aiNotFilledReason || 'Not found in the document';
+    //     summaryHtml += '<div class="ai-notfilled-summary"><strong>Not filled:</strong>';
+    //     summaryHtml += '<ul class="ai-notfilled-list">';
+    //     caseD.forEach(l => { summaryHtml += '<li>' + l + '<span class="ai-notfilled-reason"> \u2014 ' + reason + '</span></li>'; });
+    //     summaryHtml += '</ul></div>';
+    // }
+    //
+    // if (summaryHtml === '') {
+    //     summaryHtml = 'No changes were applied.';
+    // }
+
+    const messageDiv = form.querySelector('.ai-message');
+    messageDiv.className = 'ai-message success visible';
+    messageDiv.textContent = 'Changes applied. See notes under each field.';
+
+    // Mark AI as applied and disable the button
+    aiHasBeenApplied = true;
+    const aiButton = form.querySelector('.btn-ai');
+    if (aiButton) {
+        aiButton.disabled = true;
+        aiButton.textContent = 'AI Autofill (0 runs remaining)';
+    }
+
+    // Snapshot accepted state for reopening preview later
+    acceptedPreviewState = {};
+    LEASE_FIELDS.forEach(fieldName => {
+        const field = form.querySelector('[name="' + fieldName + '"]');
+        if (field) {
+            acceptedPreviewState[fieldName] = {
+                value: field.value,
+                label: FIELD_LABELS[fieldName] || fieldName,
+                source: field.classList.contains('ai-filled') ? 'ai'
+                      : field.classList.contains('user-edited') ? 'user'
+                      : 'none',
+                aiValue: field.dataset.aiSuggestedValue || null
+            };
+        }
+    });
+
+    // Show "Return to AI Preview" button
+    const returnBtn = form.querySelector('#btnReturnPreview');
+    if (returnBtn) returnBtn.style.display = '';
+
+    // Close the modal (keep aiPreviewSourceForm for reopenAiPreview)
+    document.getElementById('aiPreviewModal').classList.remove('visible');
+    previewEditedFields = new Set();
+}
+
+function reopenAiPreview() {
+    if (!aiPreviewSourceForm || Object.keys(acceptedPreviewState).length === 0) return;
+
+    previewEditedFields = new Set();
+
+    const container = document.getElementById('aiPreviewFields');
+    container.innerHTML = '';
+
+    LEASE_FIELDS.forEach(fieldName => {
+        const state = acceptedPreviewState[fieldName];
+        if (!state) return;
+
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'ai-preview-field';
+
+        const label = document.createElement('div');
+        label.className = 'ai-preview-label';
+        label.textContent = state.label;
+        fieldDiv.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'ai-preview-input';
+        input.dataset.fieldName = fieldName;
+        input.value = state.value;
+
+        if (state.source === 'user') {
+            input.classList.add('preview-edited');
+            previewEditedFields.add(fieldName);
+        }
+
+        if (state.source === 'none') {
+            input.dataset.notFound = 'true';
+            input.classList.add('preview-notfound');
+            input.placeholder = 'Enter manually if known';
+        }
+
+        input.addEventListener('input', function() {
+            previewEditedFields.add(fieldName);
+            input.classList.add('preview-edited');
+        });
+
+        fieldDiv.appendChild(input);
+
+        if (state.source === 'user' && state.aiValue) {
+            const hint = document.createElement('div');
+            hint.className = 'ai-preview-hint';
+            hint.textContent = 'AI originally suggested \'' + state.aiValue + '\'. You changed this to \'' + state.value + '\'. Because you edited this previously, the value has not reverted to the AI suggestion.';
+            fieldDiv.appendChild(hint);
+        }
+
+        container.appendChild(fieldDiv);
+    });
+
+    document.getElementById('aiPreviewModal').classList.add('visible');
+}
+
+function renderFieldExplanation(field) {
+    var existing = field.parentElement.querySelector('.field-explanation');
+    if (existing) existing.remove();
+
+    if (field.name === 'lease_nickname') return;
+
+    var text = '';
+    if (field.dataset.revertedToAi === 'true') {
+        var aiVal = field.dataset.aiSuggestedValue || '';
+        var prevUser = field.dataset.previousUserValue || '';
+        text = 'AI originally suggested \'' + aiVal + '\'. You had previously changed this to \'' + prevUser + '\'. You have now reverted to the AI-suggested value.';
+    } else if (field.classList.contains('ai-filled')) {
+        text = 'Suggested by AI';
+    } else if (field.classList.contains('user-edited') && field.dataset.overwriteSource === 'ai') {
+        var aiVal = field.dataset.aiSuggestedValue || '';
+        text = 'AI suggested \'' + aiVal + '\', changed by you';
+    } else if (field.classList.contains('user-edited') && field.dataset.overwriteSource === 'user') {
+        text = 'Entered by you';
+    } else if (field.dataset.aiNotFound === 'true') {
+        var reason = aiNotFilledReason || 'Not found in the document';
+        text = 'AI did not find a value \u2014 ' + reason;
+    }
+
+    if (text) {
+        var div = document.createElement('div');
+        div.className = 'field-explanation';
+        div.textContent = text;
+        field.parentElement.appendChild(div);
+    }
+}
+
 // Initialize edit tracking for a form
 function initEditTracking(form) {
     if (!form || manuallyEditedFields.has(form)) return;
@@ -2600,6 +3311,9 @@ function aiPrefill(button) {
     const form = button.closest('form');
     const messageDiv = form.querySelector('.ai-message');
 
+    // Show global loading immediately
+    setLoading(true, 'Running AI analysis\u2026');
+
     // Capture ALL prior values BEFORE AI updates (not just manually edited)
     // This ensures renewal leases with pre-filled values are handled correctly
     const priorValues = {};
@@ -2623,6 +3337,7 @@ function aiPrefill(button) {
         messageDiv.textContent = 'Error: No lease ID found. Please save the lease first.';
         button.disabled = false;
         button.textContent = originalText;
+        setLoading(false);
         return;
     }
 
@@ -2640,12 +3355,18 @@ function aiPrefill(button) {
 
         if (data.success) {
             const d = data.data;
-            const updates = [];        // Fields that were actually changed
-            const overwrites = [];     // Fields that had prior values replaced
+            const updates = [];        // Fields where AI has a different suggestion
+            const overwrites = [];     // Fields that had prior values and AI suggests different
             const unchanged = [];      // Fields where AI value matched existing
+            pendingSuggestions = {}; // Reset pending suggestions for this AI run
 
-            // Initialize unified changes from version changes (for renewal leases)
-            unifiedChangesMap = initUnifiedChanges(form);
+            // Initialize unified changes from version changes (for renewal leases only)
+            const leaseVersion = parseInt(form.dataset.leaseVersion) || 1;
+            if (leaseVersion > 1) {
+                unifiedChangesMap = initUnifiedChanges(form);
+            } else {
+                unifiedChangesMap = {};
+            }
 
             // Helper to safely extract value from AI response field
             // Returns null if value is missing, null, undefined, or empty string
@@ -2657,20 +3378,13 @@ function aiPrefill(button) {
                 return null;
             };
 
-            // Helper to mark field as AI-filled
-            const markAiFilled = (field) => {
-                if (!field) return;
-                field.classList.add('ai-filled');
-                field.classList.remove('user-edited');
-            };
-
             // Helper to normalize values for comparison (handles type coercion)
             const normalizeValue = (val) => {
                 if (val === null || val === undefined) return '';
                 return String(val).trim();
             };
 
-            // Update a field: always apply AI value, track changes and overwrites
+            // Store AI suggestion WITHOUT applying to form
             const updateField = (fieldName, newValue) => {
                 // Skip if AI returned null/undefined
                 if (newValue === null || newValue === undefined) return false;
@@ -2682,7 +3396,7 @@ function aiPrefill(button) {
                 const normalizedOld = normalizeValue(oldValue);
                 const normalizedNew = normalizeValue(newValue);
 
-                // If values are identical, skip update but note it
+                // If values are identical, skip but note it
                 if (normalizedOld === normalizedNew) {
                     unchanged.push({
                         fieldName: fieldName,
@@ -2691,16 +3405,14 @@ function aiPrefill(button) {
                     return false;
                 }
 
-                // Apply the new value (AI always wins)
-                field.value = newValue;
-                markAiFilled(field);
+                // Store as pending suggestion (DO NOT write to form)
+                pendingSuggestions[fieldName] = {
+                    label: FIELD_LABELS[fieldName] || fieldName,
+                    oldValue: oldValue,
+                    newValue: newValue
+                };
 
-                // Store overwrite metadata on the field element
-                field.dataset.previousValue = oldValue;
-                field.dataset.overwriteSource = 'ai';
-                field.dataset.overwrittenAt = new Date().toISOString();
-
-                // Track this update (use fieldName as fallback if label missing)
+                // Track this as an update for messaging
                 updates.push({
                     fieldName: fieldName,
                     label: FIELD_LABELS[fieldName] || fieldName,
@@ -2740,56 +3452,37 @@ function aiPrefill(button) {
             updateField('lock_in_months', getValue(d.lock_in_duration_months));
             updateField('rent_escalation_percent', getValue(d.rent_escalation_percent));
 
-            // Build summary message
-            let html = '';
-
-            if (updates.length > 0) {
-                html += `<div class="ai-update-summary">`;
-                html += `<strong>AI suggestions applied (${updates.length} field${updates.length !== 1 ? 's' : ''} updated):</strong>`;
-                html += `<ul class="ai-update-list">`;
-                updates.forEach(u => {
-                    html += `<li>${u.label}</li>`;
-                });
-                html += `</ul>`;
-                html += `</div>`;
-            }
-
-            // Merge ALL AI updates into unified changes map (keyed by field name)
-            // This includes both overwrites AND populated fields (empty → value)
-            updates.forEach(u => {
-                const existingChange = unifiedChangesMap[u.fieldName];
-                if (existingChange) {
-                    // Field already in map from version changes
-                    // Preserve original oldValue, update newValue, mark as AI
-                    existingChange.newValue = u.newValue;
-                    existingChange.source = 'ai';
-                } else {
-                    // New field not in version changes — add it
-                    unifiedChangesMap[u.fieldName] = {
-                        field: u.fieldName,
-                        label: u.label,
-                        oldValue: u.oldValue,
-                        newValue: u.newValue,
-                        changeType: u.oldValue ? 'changed' : 'added',
-                        source: 'ai'
-                    };
+            // Compute "not filled" fields and reason (needed by preview modal and apply logic)
+            aiNotFilledFields = [];
+            LEASE_FIELDS.forEach(fieldName => {
+                if (fieldName === 'lease_nickname') return;
+                const hadValueBefore = priorValues[fieldName] && priorValues[fieldName].trim() !== '';
+                const aiSuggested = pendingSuggestions.hasOwnProperty(fieldName);
+                if (!hadValueBefore && !aiSuggested) {
+                    aiNotFilledFields.push({ fieldName: fieldName, label: FIELD_LABELS[fieldName] || fieldName });
                 }
             });
 
-            // Render unified changes (includes both version and AI changes)
-            const unifiedContainer = form.parentElement.querySelector('#unifiedChanges');
-            renderUnifiedChanges(unifiedChangesMap, unifiedContainer);
-
-            if (updates.length === 0) {
-                html = 'AI analysis complete. No new values were found in the document, or all fields already match.';
+            if (aiNotFilledFields.length > 0 && updates.length > 0) {
+                const hasUncertainty = d.confidence_notes && String(d.confidence_notes).trim() !== '' && updates.length > 0;
+                aiNotFilledReason = hasUncertainty
+                    ? 'AI could not determine this confidently'
+                    : 'Not found in the document';
+            } else {
+                aiNotFilledReason = '';
             }
 
-            messageDiv.className = 'ai-message success visible';
-            messageDiv.innerHTML = html;
+            // Show a single neutral status message (detailed summary comes after Apply)
+            if (updates.length === 0) {
+                messageDiv.className = 'ai-message success visible';
+                messageDiv.innerHTML = 'AI analysis complete. No new values were found in the document, or all fields already match.';
+            } else {
+                messageDiv.className = 'ai-message success visible';
+                messageDiv.innerHTML = 'AI analysis complete. Review suggestions before applying.';
+            }
 
-            // Show AI summary
-            const aiSummary = form.querySelector('#ai-summary');
-            if (aiSummary && updates.length > 0) aiSummary.classList.add('visible');
+            // Open preview modal if there are pending suggestions
+            openAiPreviewModal(form);
         } else if (data.error_code === 'no_document') {
             // Legacy lease with no PDF — show informational modal instead of error
             messageDiv.className = 'ai-message';
@@ -2807,6 +3500,9 @@ function aiPrefill(button) {
         button.textContent = originalText;
         messageDiv.className = 'ai-message error visible';
         messageDiv.textContent = 'Unable to connect to AI service. Please fill in the fields manually.';
+    })
+    .finally(() => {
+        setLoading(false);
     });
 }
 
@@ -2927,7 +3623,8 @@ let unifiedChangesMap = {};
                 <label id="deleteModalLabel">
                     Type <code id="deleteConfirmText">DELETE</code> to confirm:
                 </label>
-                <input type="text" id="deleteConfirmInput" autocomplete="off" spellcheck="false">
+                <input type="text" id="deleteConfirmInput" autocomplete="off" spellcheck="false"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();var btn=document.getElementById('deleteModalSubmit');if(!btn.disabled)document.getElementById('deleteModalForm').requestSubmit();}">
             </div>
         </div>
         <div class="delete-modal-footer">
@@ -2936,6 +3633,7 @@ let unifiedChangesMap = {};
                 <input type="hidden" name="lease_id" id="deleteLeaseId">
                 <input type="hidden" name="confirm_text" id="deleteConfirmHidden">
                 <input type="hidden" name="expected_text" id="deleteExpectedHidden">
+                <input type="hidden" name="delete_group" id="deleteGroupHidden" value="false">
                 <button type="submit" class="delete-modal-submit" id="deleteModalSubmit" disabled>
                     Delete Permanently
                 </button>
@@ -2961,10 +3659,44 @@ let unifiedChangesMap = {};
     </div>
 </div>
 
+<!-- AI Suggestions Preview Modal -->
+<div class="ai-preview-overlay" id="aiPreviewModal">
+    <div class="ai-preview-modal">
+        <div class="ai-preview-header">
+            <h3>AI Suggestions — Review Before Applying</h3>
+        </div>
+        <div class="ai-preview-body">
+            <p class="ai-preview-note">Review the AI suggestions below. Edit any field, or clear it to skip. Click "Apply Changes" when ready.</p>
+            <div id="aiPreviewFields"></div>
+        </div>
+        <div class="ai-preview-footer">
+            <button type="button" class="ai-preview-cancel" onclick="closeAiPreviewModal()">Cancel</button>
+            <a id="aiPreviewPdfLink" href="#" target="_blank" class="ai-preview-pdf">View Lease Document (PDF)</a>
+            <button type="button" class="ai-preview-apply" onclick="applyAiPreview()">Apply Changes</button>
+        </div>
+    </div>
+</div>
+
 <script>
 function closeMissingDocumentModal() {
     document.getElementById('missingDocumentModal').classList.remove('visible');
 }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('form').forEach(form => {
+        // Only attach to forms that upload files
+        const fileInput = form.querySelector('input[type="file"]');
+        if (!fileInput) return;
+
+        form.addEventListener('submit', function () {
+            setLoading(true, 'Uploading and processing lease document\u2026 this may take up to a minute.');
+            // Force browser to repaint so overlay is visible before navigation begins
+            document.getElementById('globalLoadingOverlay').offsetHeight;
+        });
+    });
+});
 </script>
 
 <script>
@@ -2986,14 +3718,15 @@ function openDeleteModal(leaseId, leaseName, isGroupDelete) {
     confirmInput.value = '';
     submitBtn.disabled = true;
     leaseIdInput.value = leaseId;
+    document.getElementById('deleteGroupHidden').value = isGroupDelete ? 'true' : 'false';
 
     if (isGroupDelete) {
-        // For entire lease group deletion, require typing the nickname
-        titleEl.textContent = 'Delete Entire Lease Group';
-        infoEl.innerHTML = 'You are about to delete <span class="lease-name">' + escapeHtml(leaseName) + '</span> and ALL its versions permanently.';
-        deleteModalExpectedText = leaseName;
-        confirmTextEl.textContent = leaseName;
-        labelEl.innerHTML = 'Type the lease name <code>' + escapeHtml(leaseName) + '</code> exactly to confirm:';
+        // For entire lease group deletion, require typing DELETE
+        titleEl.textContent = 'Delete Entire Lease';
+        infoEl.innerHTML = 'This will permanently delete <span class="lease-name">' + escapeHtml(leaseName) + '</span> and all of its versions (including renewals). This action cannot be undone.<br><br>If you want to delete an individual lease version, please do so from inside the lease itself.';
+        deleteModalExpectedText = 'DELETE';
+        confirmTextEl.textContent = 'DELETE';
+        labelEl.innerHTML = 'Type <code>DELETE</code> to confirm:';
     } else {
         // For single lease/version deletion
         titleEl.textContent = 'Delete Lease';
@@ -3075,7 +3808,7 @@ document.getElementById('deleteConfirmInput').addEventListener('input', function
 
     hiddenInput.value = inputValue;
 
-    if (inputValue === deleteModalExpectedText) {
+    if (inputValue.toUpperCase() === deleteModalExpectedText.toUpperCase()) {
         submitBtn.disabled = false;
     } else {
         submitBtn.disabled = true;
@@ -3105,7 +3838,7 @@ document.getElementById('deleteModalForm').addEventListener('submit', function(e
     }
     // Additional client-side validation
     const confirmInput = document.getElementById('deleteConfirmInput').value;
-    if (confirmInput !== deleteModalExpectedText) {
+    if (confirmInput.toUpperCase() !== deleteModalExpectedText.toUpperCase()) {
         e.preventDefault();
         alert('Confirmation text does not match. Deletion aborted.');
         return false;
@@ -3252,5 +3985,14 @@ document.addEventListener('keydown', function(e) {
     }
 });
 </script>
+
+<!-- Global loading overlay -->
+<div class="global-loading-overlay" id="globalLoadingOverlay">
+    <div class="loading-card">
+        <div class="global-loading-spinner"></div>
+        <div class="global-loading-message" id="globalLoadingMessage"></div>
+    </div>
+</div>
+
 </body>
 </html>

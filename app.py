@@ -53,6 +53,17 @@ def format_money_filter(value):
     except (ValueError, TypeError):
         return str(value)
 
+@app.template_filter('format_date')
+def format_date_filter(date_str):
+    """Format an ISO date/datetime string to human-readable (e.g. '5 Feb 2026')."""
+    if not date_str:
+        return '—'
+    try:
+        dt = datetime.fromisoformat(date_str)
+        return dt.strftime("%-d %b %Y")
+    except (ValueError, TypeError):
+        return str(date_str)
+
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
@@ -516,7 +527,7 @@ def get_all_leases(current_only=False):
     leases = all_data.get("leases", [])
 
     if current_only:
-        leases = [l for l in leases if l.get("is_current", True)]
+        leases = [l for l in leases if l.get("is_current", True) and l.get("status", "active") != "draft"]
 
     # Sort by updated_at (most recent first)
     return sorted(
@@ -559,6 +570,54 @@ def get_lease_versions(lease_group_id):
     versions = [l for l in all_data.get("leases", [])
                 if l.get("lease_group_id") == lease_group_id]
     return sorted(versions, key=lambda x: x.get("version", 1), reverse=True)
+
+
+def cleanup_draft_leases(leases):
+    """Remove abandoned draft leases and restore previous versions if needed.
+
+    For each draft lease:
+    - Deletes the uploaded file from disk (if it exists)
+    - If the draft is a renewal (version > 1), restores is_current=True
+      on the previous version in the same lease_group_id
+    - Removes the draft lease from the list
+
+    Args:
+        leases: list of lease dictionaries (already loaded from JSON)
+
+    Returns:
+        list: the cleaned leases list with drafts removed
+    """
+    drafts = [l for l in leases if l.get("status") == "draft"]
+
+    for draft in drafts:
+        # 1. Delete uploaded file from disk
+        source_doc = draft.get("source_document") or {}
+        filename = source_doc.get("filename")
+        if filename:
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+        # 2. If renewal, restore previous version
+        if draft.get("version", 1) > 1:
+            group_id = draft.get("lease_group_id")
+            draft_version = draft.get("version", 1)
+            # Find the highest version below this draft in the same group
+            previous = [
+                l for l in leases
+                if l.get("lease_group_id") == group_id
+                and l.get("version", 1) < draft_version
+            ]
+            if previous:
+                best = max(previous, key=lambda l: l.get("version", 1))
+                best["is_current"] = True
+
+    # 3. Remove all drafts from the list
+    leases = [l for l in leases if l.get("status") != "draft"]
+
+    return leases
 
 
 def create_lease_renewal(original_lease_id):
@@ -1151,6 +1210,10 @@ def upload_file():
     new_lease_id = str(uuid.uuid4())
     all_data = _load_all_leases()
 
+    # Clean up any abandoned draft leases before creating a new one
+    all_data["leases"] = cleanup_draft_leases(all_data.get("leases", []))
+    _save_lease_file(all_data)
+
     if original_lease:
         # RENEWAL: Create new version in existing lease group
         lease_group_id = original_lease.get("lease_group_id", original_lease.get("id"))
@@ -1178,6 +1241,7 @@ def upload_file():
             "lease_group_id": lease_group_id,
             "version": max_version + 1,
             "is_current": True,
+            "status": "draft",
             "created_at": now,
             "updated_at": now,
             "source_document": {
@@ -1215,6 +1279,7 @@ def upload_file():
             "lease_group_id": new_lease_id,
             "version": 1,
             "is_current": True,
+            "status": "draft",
             "created_at": now,
             "updated_at": now,
             "source_document": {
@@ -1336,6 +1401,7 @@ def save_lease():
                 # Update current_values
                 lease["current_values"] = current_values
                 lease["updated_at"] = now
+                lease["status"] = "active"
                 # source_document and ai_extraction are preserved automatically
                 break
         else:
@@ -1416,7 +1482,7 @@ def reset_lease():
     # SECURITY: Validate confirmation text on backend
     if expected_text == "DELETE":
         # Standard single version deletion
-        if confirm_text != "DELETE":
+        if confirm_text.upper() != "DELETE":
             flash("Deletion aborted: confirmation text did not match. Type DELETE to confirm.", "error")
             return redirect(url_for("index", lease_id=lease_id))
     else:
@@ -1435,14 +1501,39 @@ def reset_lease():
     lease_group_id = lease_to_delete.get("lease_group_id", lease_id)
     is_current_version = lease_to_delete.get("is_current", True)
     deleted_version = lease_to_delete.get("version", 1)
+    delete_group = request.form.get("delete_group") == "true"
 
     # Find all versions in this lease group
     group_versions = [l for l in leases if l.get("lease_group_id") == lease_group_id]
     group_versions_sorted = sorted(group_versions, key=lambda x: x.get("version", 1), reverse=True)
 
+    # If delete_group flag is set, delete ALL versions in the group
+    if delete_group:
+        for gl in group_versions:
+            gl_doc = gl.get("source_document") or {}
+            gl_filename = gl_doc.get("filename")
+            if gl_filename:
+                try:
+                    os.remove(os.path.join(UPLOAD_FOLDER, gl_filename))
+                except OSError:
+                    pass
+        leases = [l for l in leases if l.get("lease_group_id") != lease_group_id]
+        all_data["leases"] = leases
+        _save_lease_file(all_data)
+        flash("Lease and all its versions have been permanently deleted.", "success")
+        return redirect(url_for("index"))
+
     # Determine the action based on version count
     if len(group_versions) <= 1:
         # CASE 1: Only one version - delete entire lease group
+        for gl in group_versions:
+            gl_doc = gl.get("source_document") or {}
+            gl_filename = gl_doc.get("filename")
+            if gl_filename:
+                try:
+                    os.remove(os.path.join(UPLOAD_FOLDER, gl_filename))
+                except OSError:
+                    pass
         leases = [l for l in leases if l.get("lease_group_id") != lease_group_id]
         all_data["leases"] = leases
         _save_lease_file(all_data)
@@ -1451,6 +1542,14 @@ def reset_lease():
 
     elif is_current_version:
         # CASE 2: Deleting the current version - need to promote previous version
+        # Delete uploaded file from disk
+        del_doc = lease_to_delete.get("source_document") or {}
+        del_filename = del_doc.get("filename")
+        if del_filename:
+            try:
+                os.remove(os.path.join(UPLOAD_FOLDER, del_filename))
+            except OSError:
+                pass
         # Remove the current version
         leases = [l for l in leases if l.get("id") != lease_id]
 
@@ -1480,6 +1579,14 @@ def reset_lease():
 
     else:
         # CASE 3: Deleting a non-current version - just remove it
+        # Delete uploaded file from disk
+        del_doc = lease_to_delete.get("source_document") or {}
+        del_filename = del_doc.get("filename")
+        if del_filename:
+            try:
+                os.remove(os.path.join(UPLOAD_FOLDER, del_filename))
+            except OSError:
+                pass
         leases = [l for l in leases if l.get("id") != lease_id]
         all_data["leases"] = leases
         _save_lease_file(all_data)

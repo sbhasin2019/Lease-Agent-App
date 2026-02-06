@@ -35,6 +35,184 @@ For ALL future work on this project:
 Violating these rules is considered a critical error.
 
 ----------------------------------------------------------------
+LAST UPDATED - 6 FEBRUARY 2026
+-----------------------------------------------------------------
+
+Major Changes & Fixes Implemented
+
+1. AI Autofill Flow (Stabilised & Clarified)
+	•	AI autofill can only be run once per lease
+	•	After AI is applied:
+	•	The AI button is disabled
+	•	A “Return to AI Preview” button is shown instead
+	•	Returning to preview does not re-run AI and does not incur extra AI cost
+
+⸻
+
+2. AI Preview Behaviour (Correct & Persistent)
+	•	Preview correctly handles:
+	•	AI-filled fields
+	•	User-edited fields
+	•	Fields AI did not find
+	•	When reopening preview:
+	•	User-edited values remain intact
+	•	AI values are shown only as reference (never overwrite user input)
+	•	If a user:
+	•	Accepts AI → marked as AI-filled
+	•	Edits AI value → marked as user-edited
+	•	Reverts back to AI value → explicitly shown as “reverted to AI suggestion”
+
+⸻
+
+3. Inline Field Explanations (Post-Apply)
+After applying AI suggestions:
+	•	Each field shows a clear inline explanation:
+	•	“Suggested by AI”
+	•	“AI suggested ‘X’, changed by you”
+	•	“Entered by you”
+	•	“AI did not find a value — ”
+	•	“You reverted to the AI-suggested value (previously ‘Y’)”
+	•	These explanations help users understand what AI did vs what they changed
+
+⸻
+
+4. Special Handling: Lease Nickname
+	•	AI can suggest a nickname
+	•	User can edit it
+	•	Nickname:
+	•	Never shows “AI did not find a value”
+	•	Never shows explanation text under the field
+	•	Always respects the user’s final value
+	•	In preview and return-to-preview:
+	•	The user’s value is shown
+	•	AI value is only shown as reference (never restored automatically)
+
+⸻
+
+5. Lease Deletion (Safety + Correctness)
+	•	Dashboard delete now deletes the entire lease group (including renewals)
+	•	User is clearly warned:
+	•	That all versions will be deleted
+	•	That individual versions should be deleted from inside the lease
+	•	Deletion confirmation:
+	•	Requires typing DELETE
+	•	Is case-insensitive
+	•	Works with keyboard Enter
+	•	Backend now supports explicit group deletion
+	•	All associated uploaded files are deleted correctly
+
+⸻
+
+6. Lease “Added Date”
+	•	Added date is now shown:
+	•	On the dashboard card
+	•	Inside the lease view/edit page
+	•	Uses a reusable format_date Jinja filter
+	•	Displays human-readable dates (e.g. “5 Feb 2026”)
+
+⸻
+
+7. Loading UX Improvements
+	•	Global loading overlay no longer dims the entire page
+	•	Spinner and message are wrapped in a centered loading card
+	•	Only the card is opaque; background remains visible but non-intrusive
+	•	Prevents visual overlap and improves perceived responsiveness
+
+⸻
+
+Explicit Non-Changes (Important)
+	•	❌ App name has NOT been renamed
+	•	❌ No branding updates applied
+	•	❌ No database schema changes
+	•	❌ No backend AI prompt changes
+	•	❌ No refactors beyond targeted fixes
+
+----------------------------------------------------------------
+LAST UPDATED - 5 February 2026
+----------------------------------------------------------------
+
+RECENTLY IMPLEMENTED FIXES & POLISH (AUTHORITATIVE)
+
+Implementation date: 5 February 2026
+
+The following fixes and UX improvements were completed and verified on the above date.
+They are considered stable, intentional behavior and should be treated as baseline functionality going forward.
+
+⸻
+
+A. Monetary Amount Formatting (Display Consistency)
+
+Implemented: 5 February 2026
+
+All monetary amounts shown to the user are now formatted with thousands separators for readability
+(e.g. ₹185,000 instead of ₹185000).
+
+This applies consistently across:
+	•	Dashboard lease cards (monthly rent)
+	•	View Mode financials (monthly rent, security deposit)
+	•	Lease version comparison (old → new values)
+	•	Edit Mode unified change list (“Previous values replaced”)
+
+Rules:
+	•	Stored values remain raw numbers (no formatting in persisted data)
+	•	Formatting is display-only
+	•	Non-monetary values (dates, names, text) are never affected
+	•	Missing values continue to display as —
+
+⸻
+
+B. Renewal Creation Consistency (Data Integrity)
+
+Implemented: 5 February 2026
+
+All renewal leases are now created with fully initialized nested structures, regardless of how the renewal is created.
+
+Specifically, every renewal includes:
+	•	lock_in_period.duration_months
+	•	renewal_terms.rent_escalation_percent
+
+These fields:
+	•	Always exist at creation time
+	•	Default to null
+	•	No longer rely on migration logic to appear later
+
+This ensures:
+	•	Consistent data shape across all renewal leases
+	•	No divergence between different renewal creation flows
+	•	Safer version comparison and UI rendering
+
+⸻
+
+C. Legacy Lease Handling — Missing Document UX
+
+Implemented: 5 February 2026
+
+Some very early (pre-migration) leases may not have their original PDF stored and therefore cannot run AI Autofill.
+
+This scenario is now handled explicitly and clearly.
+
+Backend behavior
+	•	Detects when:
+	•	No extracted text exists and
+	•	No original document file exists on disk
+	•	Returns a specific error code indicating a missing document (not a generic failure)
+
+Frontend behavior
+	•	Suppresses the generic red “AI extraction failed” error
+	•	Displays an informational modal instead
+
+User-facing messaging
+	•	Clearly explains why AI cannot run
+	•	Reassures the user that nothing is broken
+	•	Guides the user to re-upload the lease document
+	•	Uses calm, informational language (not danger/error styling)
+
+Scope:
+	•	This is a legacy-only scenario
+	•	All newly uploaded leases automatically store both PDF and extracted text
+	•	New users should never encounter this issue under normal usage
+
+----------------------------------------------------------------
 CORE CONCEPTS & DATA MODEL (AUTHORITATIVE)
 ----------------------------------------------------------------
 
