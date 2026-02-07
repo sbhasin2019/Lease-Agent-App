@@ -967,6 +967,365 @@ No user-visible behaviour has changed.
     - No existing routes modified
     - No verification logic added
 
+      ----------------------------------------------------------------
+
+      Step 10: Landlord Review & Internal Notes
+      Status: IMPLEMENTED
+      Date: 7 February 2026
+
+      What was added:
+
+      New data file: landlord_review_data.json
+      - Stores landlord review/note records only
+      - Append-only (no edits or deletes)
+      - Linked via payment_id and lease_group_id
+      - NEVER visible to tenants
+      - Added to .gitignore
+
+      Structure: {"reviews": [...]}
+      Each record:
+      {
+        "id":              str (uuid4)
+        "payment_id":      str (references payment_data.json)
+        "lease_group_id":  str (uuid4)
+        "reviewed_at":     str (ISO timestamp)
+        "review_type":     "acknowledged" | "flagged" | "noted"
+        "internal_note":   str | null
+      }
+
+      Backend (app.py):
+      - _load_all_landlord_reviews()
+      - _save_landlord_review_file(data)
+      - get_reviews_for_lease_group(lease_group_id)
+        - Primary loader — returns all reviews for a lease group
+        - Used to build per-payment dicts in the index route
+      - get_reviews_for_payment(payment_id)
+        - Convenience function for single-payment lookups
+      - POST /lease/<lease_group_id>/payment/<payment_id>/review
+        - Validates payment_id exists and belongs to lease_group_id
+        - Accepts review_type (required) and internal_note (optional)
+        - Appends review record — never modifies payment data
+        - Flashes feedback, redirects to lease view
+      - Index route (view mode) now loads reviews and passes:
+        - payment_reviews: {payment_id: [reviews, newest first]}
+        - latest_payment_review: {payment_id: most_recent_review}
+
+      Template (index.html):
+      - "Landlord review" block added inside each payment card
+        - Shows latest review badge + note + timestamp
+        - Badge colours:
+          - Acknowledged: muted green (#d1fae5)
+          - Flagged: amber (#fef3c7)
+          - Noted: blue (#dbeafe)
+        - Collapsible history if multiple reviews exist
+      - "Add review / note" form (collapsed by default)
+        - Dropdown: Acknowledged / Flagged / Noted
+        - Optional internal note textarea
+        - Helper text: "Once a note is saved, it can't be changed
+          or removed. If you need to add more context later, just
+          add another note — the most recent one will appear first."
+
+      Rules enforced:
+      - Reviews are append-only — no edits, no deletes
+      - Reviews are landlord-only — never shown to tenants
+      - No "verified" or "approved" language used
+      - Multiple reviews per payment allowed (latest shown prominently)
+      - payment_data.json is never modified by review logic
+
+      What was NOT changed:
+      - No schema changes to payment_data.json
+      - No tenant_access.json changes
+      - No lease_data.json changes
+      - No tenant-facing routes or template modified
+      - No dashboard changes
+      - No authentication added
+
+      ----------------------------------------------------------------
+
+      Step 5 (Revision): Tenant Confirmation Form — Option B
+      Status: IMPLEMENTED
+      Date: 7 February 2026
+
+      What changed:
+
+      The tenant confirmation form was revised from a single-type
+      submission (one dropdown) to a multi-type submission (three
+      checkbox sections). This is a UI + route-handling change only.
+
+      Template (tenant_confirm.html):
+      - Single "Payment Type" dropdown REMOVED
+      - Three independent checkbox sections added:
+        - Rent (with TDS field, rent-only)
+        - Maintenance
+        - Utilities
+      - Each section has its own:
+        - Amount paid (required if section is checked)
+        - Date paid (optional)
+        - Proof upload (optional, per-section)
+      - Month and Year are shared across all sections
+      - Notes field is shared across all sections
+      - Disclaimer is acknowledged once per submission
+      - Section visibility toggled by checkbox (small JS helper)
+
+      Microcopy added:
+      - Near checkboxes: "Select all that apply. Each selected item
+        will be recorded separately."
+      - Near proof uploads: "Upload proof related to this payment
+        (optional)."
+      - Near disclaimer: "If you forget something or need to add
+        more details later, you can submit another confirmation.
+        Previous entries cannot be changed."
+
+      Backend (app.py — POST /tenant/<token>/confirm):
+      - Determines which sections are selected
+      - Validates each selected section independently
+      - If ANY section fails validation → entire submission rejected
+      - No partial saves — all records saved in a single write
+      - Each selected section produces its own:
+        - payment_id (uuid4)
+        - Payment confirmation record (locked schema)
+        - Proof file (if uploaded)
+      - amount_agreed set only for rent (from lease)
+      - TDS processed only for rent
+      - "Amount paid" used consistently in validation messages
+
+      Data model: UNCHANGED
+      - Still one payment record per confirmation type
+      - Still append-only, immutable after creation
+      - No new fields, no schema changes
+
+      What was NOT changed:
+      - No payment_data.json structure changes
+      - No landlord UI changes
+      - No dashboard changes
+      - No verification or approval logic
+      - No tenant_access.json changes
+      - No lease_data.json changes
+
+      ----------------------------------------------------------------
+
+                                                               
+  ---                                                                                                             
+        ----------------------------------------------------------------                                          
+                                                                                                                  
+        Tenant-Visible Flagged Reviews                                                                            
+        Status: IMPLEMENTED → SUPERSEDED BY PHASE 2                                                               
+        Date: 7 February 2026
+
+        What changed:
+
+        Flagged reviews (from Step 10) were made visible to tenants.
+        Acknowledged and Noted reviews remain landlord-internal only.
+
+        Backend (app.py):
+        - Flagging now requires a message (internal_note is mandatory
+          when review_type == "flagged")
+        - Tenant page route loads reviews and builds a flagged_payments
+          dict — only the latest review per payment is checked, and
+          only if it is "flagged"
+        - A later non-flagged review (acknowledged/noted) clears the
+          flag from the tenant's view
+
+        Landlord UI (index.html):
+        - "Add review / note" renamed to "Review this submission"
+        - Per-type explanations added below dropdown:
+          - Acknowledged — for your records only
+          - Noted — private internal note
+          - Flagged — shown to the tenant (comment required)
+        - Dynamic warning when "Flagged" is selected:
+          "This message will be shown to the tenant."
+        - toggleFlagWarning() JS function added
+
+        Tenant UI (tenant_confirm.html):
+        - "Your past submissions" section added showing all previous
+          payment confirmations for this lease
+        - Each card shows: type, month/year, amount paid, date
+        - "Needs attention" amber badge shown when latest review is
+          flagged
+        - Landlord's flag message displayed below the payment card
+        - Helper text: "You can submit another confirmation or upload
+          additional proof. Previous submissions cannot be changed."
+
+        Rules enforced:
+        - Only "flagged" reviews are tenant-visible
+        - Acknowledged and Noted are never shown to tenants
+        - A non-flagged review after a flag clears the tenant-visible
+          badge
+        - Flagging requires a message (enforced server-side)
+        - payment_data.json is never modified
+
+        Note: This change is now superseded by Phase 2, which replaced
+        the static flag display with full conversation threads.
+
+        ----------------------------------------------------------------
+
+        Phase 2: Flagged Payment Conversations (Landlord ↔ Tenant)
+        Status: IMPLEMENTED
+        Date: 7 February 2026
+
+        What changed:
+
+        The landlord review system (Step 10) was extended into a
+        structured, append-only conversation system. Landlords can
+        flag a payment with a message, tenants can reply, landlords
+        can reply back or close the conversation. All events are
+        stored in landlord_review_data.json.
+
+        Schema changes (landlord_review_data.json):
+
+        The record schema was extended from Step 10. Old records are
+        normalized on read via _normalize_event() — no data migration
+        required.
+
+        Field renames (old → new):
+        - reviewed_at → created_at
+        - review_type → event_type
+        - internal_note → message
+
+        New fields:
+        - actor: "landlord" | "tenant"
+        - attachments: list of str (relative file paths)
+
+        Event types: "acknowledged" | "flagged" | "noted" | "response"
+
+        Current record schema:
+        {
+          "id":              str (uuid4)
+          "payment_id":      str (references payment_data.json)
+          "lease_group_id":  str (uuid4)
+          "created_at":      str (ISO timestamp)
+          "event_type":      "acknowledged" | "flagged" | "noted" | "response"
+          "actor":           "landlord" | "tenant"
+          "message":         str | null
+          "attachments":     list of str (relative file paths)
+        }
+
+        Backend (app.py):
+
+        Helpers:
+        - _normalize_event(record)
+          - Maps old field names to new on read
+          - Adds defaults: actor = "landlord", attachments = []
+          - Passes new-format records through unchanged
+        - get_events_for_lease_group(lease_group_id)
+          - Returns all normalized events, newest first
+          - Replaces get_reviews_for_lease_group()
+        - get_events_for_payment(payment_id)
+          - Returns all normalized events for one payment
+          - Replaces get_reviews_for_payment()
+        - get_conversation_state(events)
+          - Computes conversation state from event list
+          - Finds the latest "flagged" event
+          - If no flag: {"open": False, "thread": []}
+          - If flag exists: checks if any subsequent event is
+            "acknowledged" or "noted" (which closes the conversation)
+          - Returns {"open": bool, "thread": [events from flag onward]}
+          - State is computed, never stored
+
+        Routes:
+        - POST /lease/<gid>/payment/<pid>/review (updated)
+          - Now accepts 4 event types: acknowledged, flagged, noted,
+            response
+          - Writes new schema (created_at, event_type, actor, message,
+            attachments)
+          - For "response": validates conversation is open
+          - For "flagged": message required
+          - Supports optional file upload (attachment field)
+          - Form field names unchanged: review_type, internal_note
+            (backend maps to new schema)
+        - POST /tenant/<token>/payment/<pid>/response (new)
+          - Token-authenticated tenant reply route
+          - Validates token, payment ownership, conversation is open
+          - Message required, optional file attachment
+          - Writes event with actor = "tenant"
+          - Redirects to tenant page
+
+        Data loading:
+        - Index route (view mode) now passes:
+          - payment_events: {payment_id: [events, oldest first]}
+          - payment_conversation: {payment_id: conversation_state}
+        - Tenant page route passes the same two dicts
+        - Old variables removed: payment_reviews, latest_payment_review,
+          flagged_payments
+
+        Landlord UI (index.html):
+
+        The flat review display and single review form were replaced
+        with a conversation-aware block per payment card:
+
+        1. Event timeline (when events exist):
+           - All events shown chronologically, oldest first
+           - Each event: actor badge (Landlord/Tenant), type badge
+             (Acknowledged/Flagged/Noted/Reply), timestamp, message,
+             attachment links
+           - Acknowledged/Noted events shown with muted opacity (0.75)
+
+        2. When conversation is open (convo.open):
+           - Reply form: textarea + optional attachment + "Send reply"
+           - Close actions:
+             - "Acknowledge & close" single-click button
+             - "Note & close..." expandable with optional note
+
+        3. When no conversation is open:
+           - Standard review form (collapsed by default):
+             - Dropdown: Acknowledged / Flagged / Noted
+             - Note textarea
+             - Optional file attachment (new)
+             - Flag warning preserved
+
+        Tenant UI (tenant_confirm.html):
+
+        The static "Needs attention" badge and flag message were
+        replaced with a conversation thread per payment card:
+
+        1. Conversation thread (when convo.thread exists):
+           - Shows only tenant-visible events: flagged + response
+           - Acknowledged/Noted events are never shown to tenants
+           - Each event: "Landlord" or "You" label, date, message,
+             attachment links
+           - Landlord messages: amber background
+           - Tenant messages: blue background
+
+        2. When conversation is open:
+           - Reply form: textarea + optional attachment + "Send reply"
+           - Helper text: "Your reply will be saved and shared with
+             your landlord. Previous entries cannot be changed."
+
+        3. When conversation is closed:
+           - Thread shown read-only
+           - Green indicator: "This issue has been resolved."
+
+        Conversation lifecycle:
+        1. Landlord flags a payment (event_type: "flagged") → opens
+        2. Tenant sees thread + reply form
+        3. Either party can send responses (event_type: "response")
+        4. Landlord closes by submitting "acknowledged" or "noted"
+        5. Tenant sees "This issue has been resolved." — no reply form
+
+        Attachments:
+        - Reuses save_proof_file(lease_group_id, event_id, file)
+        - Files go to uploads/proofs/{lease_group_id}/
+        - Served via existing /view_proof route
+        - Single file per reply
+
+        Data model: EXTENDED (backward compatible)
+        - landlord_review_data.json structure unchanged: {"reviews": []}
+        - Old records normalized on read — no migration needed
+        - New records use extended schema exclusively
+        - payment_data.json: NEVER modified
+        - tenant_access.json: UNCHANGED
+        - lease_data.json: UNCHANGED
+
+        What was NOT changed:
+        - No new data files created
+        - No payment record schema changes
+        - No authentication changes beyond existing token model
+        - No dashboard changes
+        - No AI logic changes
+        - No edit mode changes
+
+        ----------------------------------------------------------------
+
 ----------------------------------------------------------------
 UPDATED - 6 FEBRUARY 2026
 -----------------------------------------------------------------

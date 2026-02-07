@@ -2722,6 +2722,123 @@
                         {% endfor %}
                     </div>
                     {% endif %}
+
+                    {# ---- LANDLORD REVIEW / CONVERSATION BLOCK (Phase 2) ---- #}
+                    {% set pc_events = payment_events.get(pc.id, []) %}
+                    {% set convo = payment_conversation.get(pc.id, {"open": False, "thread": []}) %}
+
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #d1d5db;">
+
+                    {# ---- Event timeline ---- #}
+                    {% if pc_events %}
+                    <div style="margin-bottom: 10px;">
+                        <span style="font-size: 0.85em; color: #777;">Review history</span>
+                        {% for ev in pc_events %}
+                        <div style="margin-top: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#f9fafb{% endif %}; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85em;{% if ev.event_type in ('acknowledged', 'noted') %} opacity: 0.75;{% endif %}">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                {% if ev.actor == 'tenant' %}
+                                <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Tenant</span>
+                                {% else %}
+                                <span style="background: #f3f4f6; color: #374151; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Landlord</span>
+                                {% endif %}
+                                {% if ev.event_type == 'acknowledged' %}
+                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Acknowledged</span>
+                                {% elif ev.event_type == 'flagged' %}
+                                <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Flagged</span>
+                                {% elif ev.event_type == 'noted' %}
+                                <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Noted</span>
+                                {% elif ev.event_type == 'response' %}
+                                <span style="background: #e0e7ff; color: #3730a3; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Reply</span>
+                                {% endif %}
+                                <span style="color: #999; font-size: 0.85em;">{{ ev.created_at[:16]|replace('T', ' ') if ev.created_at else '' }}</span>
+                            </div>
+                            {% if ev.message %}
+                            <div style="margin-top: 4px; color: #555;">{{ ev.message }}</div>
+                            {% endif %}
+                            {% if ev.attachments %}
+                            <div style="margin-top: 4px;">
+                                {% for att in ev.attachments %}
+                                {% set att_filename = att.split('/')[-1] %}
+                                <a href="{{ url_for('view_proof', lease_group_id=pc.lease_group_id, filename=att_filename) }}" target="_blank" style="color: #2563eb; font-size: 0.85em;">{{ att_filename }}</a>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {# ---- Actions depend on conversation state ---- #}
+                    {% if convo.open %}
+                    {# ---- CONVERSATION OPEN: Reply + Close actions ---- #}
+                    <div style="margin-top: 8px;">
+                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-bottom: 10px;">
+                            <input type="hidden" name="review_type" value="response">
+                            <div style="margin-bottom: 6px;">
+                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Reply to tenant</label>
+                                <textarea name="internal_note" rows="2" placeholder="Type your reply..." required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                                <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
+                                <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
+                            </div>
+                            <button type="submit" style="background: #2563eb; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Send reply</button>
+                        </form>
+
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
+                            <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0;">
+                                <input type="hidden" name="review_type" value="acknowledged">
+                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge &amp; close</button>
+                            </form>
+                            <details style="margin: 0;">
+                                <summary style="font-size: 0.8em; color: #555; cursor: pointer; padding: 5px 0;">Note &amp; close...</summary>
+                                <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin-top: 6px;">
+                                    <input type="hidden" name="review_type" value="noted">
+                                    <textarea name="internal_note" rows="2" placeholder="Add a closing note (optional)..." style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                                    <button type="submit" style="background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer; margin-top: 4px;">Note &amp; close</button>
+                                </form>
+                            </details>
+                        </div>
+                    </div>
+
+                    {% else %}
+                    {# ---- NO OPEN CONVERSATION: Standard review form ---- #}
+                    <details style="margin-top: {% if pc_events %}6{% else %}0{% endif %}px;">
+                        <summary style="font-size: 0.8em; color: #2563eb; cursor: pointer;">Review this submission</summary>
+                        <p style="font-size: 0.8em; color: #999; margin: 6px 0 8px 0;">
+                            Once a note is saved, it can't be changed or removed.
+                            If you need to add more context later, just add another note — the most recent one will appear first.
+                        </p>
+                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-top: 8px;">
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Review type</label>
+                                <select name="review_type" required onchange="toggleFlagWarning(this)" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em;">
+                                    <option value="acknowledged">Acknowledged</option>
+                                    <option value="flagged">Flagged</option>
+                                    <option value="noted">Noted</option>
+                                </select>
+                                <div style="font-size: 0.8em; color: #777; margin-top: 4px; line-height: 1.5;">
+                                    Acknowledged — for your records only<br>
+                                    Noted — private internal note<br>
+                                    Flagged — shown to the tenant (comment required)
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Note</label>
+                                <textarea name="internal_note" rows="2" placeholder="Add a note..." style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                                <span class="flag-warning" style="display: none; font-size: 0.8em; color: #92400e; margin-top: 4px;">This message will be shown to the tenant.</span>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
+                                <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
+                            </div>
+                            <button type="submit" style="background: #374151; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Save review</button>
+                        </form>
+                    </details>
+                    {% endif %}
+
+                    </div>
+
                 </div>
                 {% endfor %}
             {% else %}
@@ -3696,6 +3813,11 @@ function aiPrefill(button) {
 }
 
 // Toggle version changes visibility in View Mode
+function toggleFlagWarning(select) {
+    var warning = select.closest('form').querySelector('.flag-warning');
+    if (warning) warning.style.display = select.value === 'flagged' ? 'block' : 'none';
+}
+
 function toggleVersionChanges() {
     const section = document.getElementById('versionChangesSection');
     const button = document.querySelector('.btn-toggle-changes');

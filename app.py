@@ -582,6 +582,60 @@ def _save_tenant_access_file(data):
         return False
 
 
+def _load_all_landlord_reviews():
+    """Load the full landlord review collection from JSON file.
+
+    Returns:
+        dict: {"reviews": [...]} structure,
+              or {"reviews": []} if file is missing or invalid
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "landlord_review_data.json")
+
+    if not os.path.exists(json_path):
+        return {"reviews": []}
+
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if not content.strip():
+            return {"reviews": []}
+
+        data = json.loads(content)
+        return data
+
+    except json.JSONDecodeError:
+        return {"reviews": []}
+    except IOError:
+        return {"reviews": []}
+
+
+def _save_landlord_review_file(data):
+    """Atomically save landlord review data to JSON file.
+
+    Returns:
+        bool: True on success, False on failure
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "landlord_review_data.json")
+    tmp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "landlord_review_data.tmp")
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, json_path)
+        return True
+    except (IOError, OSError):
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
 def generate_tenant_token(lease_group_id):
     """Generate a new tenant access token for a lease group.
 
@@ -734,6 +788,101 @@ def get_payments_for_lease_group(lease_group_id):
     matching = [c for c in confirmations if c.get("lease_group_id") == lease_group_id]
     matching.sort(key=lambda c: c.get("submitted_at", ""), reverse=True)
     return matching
+
+
+def _normalize_event(record):
+    """Normalize a review/event record to the Phase 2 schema.
+
+    Maps old field names to new:
+      reviewed_at → created_at
+      review_type → event_type
+      internal_note → message
+    Adds defaults for missing fields:
+      actor = "landlord"
+      attachments = []
+    Passes through new-format records unchanged.
+    """
+    normalized = dict(record)
+    if "reviewed_at" in normalized and "created_at" not in normalized:
+        normalized["created_at"] = normalized.pop("reviewed_at")
+    if "review_type" in normalized and "event_type" not in normalized:
+        normalized["event_type"] = normalized.pop("review_type")
+    if "internal_note" in normalized and "message" not in normalized:
+        normalized["message"] = normalized.pop("internal_note")
+    if "actor" not in normalized:
+        normalized["actor"] = "landlord"
+    if "attachments" not in normalized:
+        normalized["attachments"] = []
+    return normalized
+
+
+def get_events_for_lease_group(lease_group_id):
+    """Fetch all events for a lease group, normalized. Read-only.
+
+    Returns:
+        list: Event records, newest first.
+    """
+    review_data = _load_all_landlord_reviews()
+    reviews = review_data.get("reviews", [])
+    matching = [_normalize_event(r) for r in reviews
+                if r.get("lease_group_id") == lease_group_id]
+    matching.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return matching
+
+
+def get_events_for_payment(payment_id):
+    """Fetch all events for a specific payment, normalized. Read-only.
+
+    Returns:
+        list: Event records, newest first.
+    """
+    review_data = _load_all_landlord_reviews()
+    reviews = review_data.get("reviews", [])
+    matching = [_normalize_event(r) for r in reviews
+                if r.get("payment_id") == payment_id]
+    matching.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return matching
+
+
+def get_conversation_state(events):
+    """Compute conversation state from a list of events for one payment.
+
+    Args:
+        events: List of normalized event records (any sort order).
+
+    Returns:
+        dict: {
+            "open": bool,
+            "thread": [events in the active/latest conversation, oldest first]
+        }
+    """
+    if not events:
+        return {"open": False, "thread": []}
+
+    # Sort oldest first to walk chronologically
+    chronological = sorted(events, key=lambda e: e.get("created_at", ""))
+
+    # Find the latest "flagged" event
+    latest_flag_idx = None
+    for i in range(len(chronological) - 1, -1, -1):
+        if chronological[i].get("event_type") == "flagged":
+            latest_flag_idx = i
+            break
+
+    if latest_flag_idx is None:
+        return {"open": False, "thread": []}
+
+    # Thread = everything from the latest flag onward
+    thread = chronological[latest_flag_idx:]
+
+    # Conversation is open unless a closing event exists after the flag
+    is_open = True
+    for event in thread[1:]:
+        if event.get("event_type") in ("acknowledged", "noted"):
+            is_open = False
+            break
+
+    return {"open": is_open, "thread": thread}
 
 
 def _load_all_leases():
@@ -1542,10 +1691,27 @@ def index():
     tenant_tokens = []
     active_tenant_token = None
     payment_confirmations = []
+    payment_events = {}
+    payment_conversation = {}
     if lease_data and not edit_mode:
         tenant_tokens = get_all_tokens_for_lease_group(lease_group_id)
         active_tenant_token = next((t for t in tenant_tokens if t.get("is_active")), None)
         payment_confirmations = get_payments_for_lease_group(lease_group_id)
+
+        # Load events for this lease group (Phase 2)
+        all_events = get_events_for_lease_group(lease_group_id)
+        for event in all_events:
+            pid = event.get("payment_id")
+            if pid:
+                if pid not in payment_events:
+                    payment_events[pid] = []
+                payment_events[pid].append(event)
+        # Reverse to oldest-first (helper returns newest-first)
+        for pid in payment_events:
+            payment_events[pid].reverse()
+        # Compute conversation state per payment
+        for pid, events in payment_events.items():
+            payment_conversation[pid] = get_conversation_state(events)
 
     # Compute monthly submission summary (Step 9)
     monthly_summary = []
@@ -1602,6 +1768,8 @@ def index():
                            tenant_tokens=tenant_tokens,
                            active_tenant_token=active_tenant_token,
                            payment_confirmations=payment_confirmations,
+                           payment_events=payment_events,
+                           payment_conversation=payment_conversation,
                            monthly_summary=monthly_summary)
 
 
@@ -2230,6 +2398,171 @@ def revoke_token_route(lease_group_id):
     return redirect(url_for("index", lease_id=redirect_lease_id or ""))
 
 
+@app.route("/lease/<lease_group_id>/payment/<payment_id>/review", methods=["POST"])
+def submit_payment_review(lease_group_id, payment_id):
+    """Landlord action: add an event for a payment confirmation.
+
+    Supports: flagged, response, acknowledged, noted.
+    Append-only — writes to landlord_review_data.json.
+    Never modifies payment_data.json.
+    """
+    # Find a lease_id in this group to redirect back to
+    leases = _load_all_leases().get("leases", [])
+    redirect_lease_id = None
+    for l in leases:
+        if l.get("lease_group_id") == lease_group_id and l.get("is_current"):
+            redirect_lease_id = l.get("id")
+            break
+
+    # Validate payment_id exists and belongs to this lease_group_id
+    payment_data = _load_all_payments()
+    payment_record = None
+    for c in payment_data.get("confirmations", []):
+        if c.get("id") == payment_id and c.get("lease_group_id") == lease_group_id:
+            payment_record = c
+            break
+
+    if not payment_record:
+        flash("Payment confirmation not found.", "error")
+        return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+    # Validate event_type
+    event_type = request.form.get("review_type", "").strip()
+    if event_type not in ("acknowledged", "flagged", "noted", "response"):
+        flash("Invalid review type.", "error")
+        return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+    # Message — required for flagged and response, optional otherwise
+    message = request.form.get("internal_note", "").strip() or None
+
+    if event_type == "flagged" and not message:
+        flash("Please add a message for the tenant when flagging a submission.", "error")
+        return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+    if event_type == "response" and not message:
+        flash("Please add a message to your reply.", "error")
+        return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+    # For response: validate conversation is open
+    if event_type == "response":
+        events = get_events_for_payment(payment_id)
+        convo = get_conversation_state(events)
+        if not convo["open"]:
+            flash("No open conversation to reply to.", "error")
+            return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+    # Handle optional file upload
+    event_id = str(uuid.uuid4())
+    attachments = []
+    upload_file = request.files.get("attachment")
+    if upload_file and upload_file.filename:
+        relative_path, error = save_proof_file(lease_group_id, event_id, upload_file)
+        if error:
+            flash(f"File upload failed: {error}", "error")
+            return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+        attachments.append(relative_path)
+
+    # Build event record (Phase 2 schema)
+    event_record = {
+        "id": event_id,
+        "payment_id": payment_id,
+        "lease_group_id": lease_group_id,
+        "created_at": datetime.now().isoformat(),
+        "event_type": event_type,
+        "actor": "landlord",
+        "message": message,
+        "attachments": attachments,
+    }
+
+    # Append-only save
+    review_data = _load_all_landlord_reviews()
+    review_data["reviews"].append(event_record)
+    saved = _save_landlord_review_file(review_data)
+
+    if saved:
+        flash("Review saved.", "success")
+    else:
+        flash("Failed to save review. Please try again.", "error")
+
+    return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+
+@app.route("/tenant/<token>/payment/<payment_id>/response", methods=["POST"])
+def tenant_payment_response(token, payment_id):
+    """Tenant action: reply to a flagged payment conversation.
+
+    Token-authenticated. Append-only.
+    Allowed only while the conversation is open.
+    """
+    # Validate token
+    result = validate_token(token)
+    if not result["valid"]:
+        flash("Invalid or expired link.", "error")
+        return redirect(url_for("tenant_page", token=token))
+
+    lease_group_id = result["lease_group_id"]
+
+    # Validate payment_id exists and belongs to this lease_group_id
+    payment_data = _load_all_payments()
+    payment_record = None
+    for c in payment_data.get("confirmations", []):
+        if c.get("id") == payment_id and c.get("lease_group_id") == lease_group_id:
+            payment_record = c
+            break
+
+    if not payment_record:
+        flash("Payment submission not found.", "error")
+        return redirect(url_for("tenant_page", token=token))
+
+    # Validate conversation is open
+    events = get_events_for_payment(payment_id)
+    convo = get_conversation_state(events)
+    if not convo["open"]:
+        flash("This conversation is closed.", "error")
+        return redirect(url_for("tenant_page", token=token))
+
+    # Message is required
+    message = request.form.get("message", "").strip()
+    if not message:
+        flash("Please enter a message.", "error")
+        return redirect(url_for("tenant_page", token=token))
+
+    # Handle optional file upload
+    event_id = str(uuid.uuid4())
+    attachments = []
+    upload_file = request.files.get("attachment")
+    if upload_file and upload_file.filename:
+        relative_path, error = save_proof_file(lease_group_id, event_id, upload_file)
+        if error:
+            flash(f"File upload failed: {error}", "error")
+            return redirect(url_for("tenant_page", token=token))
+        attachments.append(relative_path)
+
+    # Build event record (Phase 2 schema)
+    event_record = {
+        "id": event_id,
+        "payment_id": payment_id,
+        "lease_group_id": lease_group_id,
+        "created_at": datetime.now().isoformat(),
+        "event_type": "response",
+        "actor": "tenant",
+        "message": message,
+        "attachments": attachments,
+    }
+
+    # Append-only save
+    review_data = _load_all_landlord_reviews()
+    review_data["reviews"].append(event_record)
+    saved = _save_landlord_review_file(review_data)
+
+    if saved:
+        flash("Reply sent.", "success")
+    else:
+        flash("Failed to send reply. Please try again.", "error")
+
+    return redirect(url_for("tenant_page", token=token))
+
+
 # ----------------------------------------------------------------
 # TENANT ACCESS ROUTES (Phase 1 — Step 5)
 # ----------------------------------------------------------------
@@ -2267,21 +2600,43 @@ def tenant_page(token):
         lease_nickname = cv.get("lease_nickname") or "Untitled Lease"
         agreed_rent = cv.get("monthly_rent")
 
+    # Load past submissions and events for tenant view (Phase 2)
+    payment_confirmations = get_payments_for_lease_group(lease_group_id)
+    all_events = get_events_for_lease_group(lease_group_id)
+
+    # Build events per payment and conversation state
+    payment_events = {}
+    payment_conversation = {}
+    for event in all_events:
+        pid = event.get("payment_id")
+        if pid:
+            if pid not in payment_events:
+                payment_events[pid] = []
+            payment_events[pid].append(event)
+    for pid in payment_events:
+        payment_events[pid].reverse()  # oldest first
+    for pid, events in payment_events.items():
+        payment_conversation[pid] = get_conversation_state(events)
+
     return render_template("tenant_confirm.html",
                            token_valid=True,
                            token=token,
                            lease_group_id=lease_group_id,
                            lease_nickname=lease_nickname,
                            agreed_rent=agreed_rent,
+                           payment_confirmations=payment_confirmations,
+                           payment_events=payment_events,
+                           payment_conversation=payment_conversation,
                            success=False)
 
 
 @app.route("/tenant/<token>/confirm", methods=["POST"])
 def tenant_confirm(token):
-    """Accept and persist a tenant payment confirmation.
+    """Accept and persist tenant payment confirmations (one per selected type).
 
     Validates token again (do NOT trust GET).
-    Creates a new append-only payment record.
+    Creates one append-only payment record per selected section.
+    Rejects entire submission if any section fails validation.
     Never modifies existing records or proof files.
     """
     # Re-validate token (do not trust prior GET)
@@ -2310,12 +2665,19 @@ def tenant_confirm(token):
         lease_nickname = cv.get("lease_nickname") or "Untitled Lease"
         agreed_rent = cv.get("monthly_rent")
 
-    # --- Extract and validate form data ---
-    errors = []
+    def render_error(errors):
+        return render_template("tenant_confirm.html",
+                               token_valid=True,
+                               token=token,
+                               lease_group_id=lease_group_id,
+                               lease_nickname=lease_nickname,
+                               agreed_rent=agreed_rent,
+                               success=False,
+                               errors=errors,
+                               form=request.form)
 
-    confirmation_type = request.form.get("confirmation_type", "").strip()
-    if confirmation_type not in ("rent", "maintenance", "utilities"):
-        errors.append("Invalid payment type.")
+    # --- Shared fields: month, year, disclaimer, notes ---
+    errors = []
 
     try:
         period_month = int(request.form.get("period_month", ""))
@@ -2334,114 +2696,141 @@ def tenant_confirm(token):
         errors.append("Year is required.")
         period_year = None
 
-    try:
-        amount_declared = float(request.form.get("amount_declared", ""))
-        if amount_declared <= 0:
-            errors.append("Amount declared must be greater than zero.")
-    except (ValueError, TypeError):
-        errors.append("Amount declared is required.")
-        amount_declared = None
-
-    # TDS: distinguish between not provided (null) and explicitly zero
-    tds_raw = request.form.get("tds_deducted", "").strip()
-    tds_deducted = None
-    if tds_raw:
-        try:
-            tds_deducted = float(tds_raw)
-            if tds_deducted < 0:
-                errors.append("TDS deducted cannot be negative.")
-            elif amount_declared is not None and tds_deducted > amount_declared:
-                errors.append("TDS deducted cannot exceed amount declared.")
-        except (ValueError, TypeError):
-            errors.append("TDS deducted must be a number.")
-
-    # date_paid is optional
-    date_paid = request.form.get("date_paid", "").strip() or None
-
-    # notes is optional
-    notes = request.form.get("notes", "").strip() or None
-
-    # Disclaimer must be acknowledged
     disclaimer_checked = request.form.get("disclaimer_acknowledged")
     if not disclaimer_checked:
         errors.append("You must acknowledge the disclaimer to submit.")
 
-    # amount_agreed: only for rent, copied from lease (not from form)
-    amount_agreed = None
-    if confirmation_type == "rent" and agreed_rent is not None:
+    notes = request.form.get("notes", "").strip() or None
+
+    # --- Determine which sections are selected ---
+    rent_selected = bool(request.form.get("rent_selected"))
+    maintenance_selected = bool(request.form.get("maintenance_selected"))
+    utilities_selected = bool(request.form.get("utilities_selected"))
+
+    if not (rent_selected or maintenance_selected or utilities_selected):
+        errors.append("Please select at least one payment type.")
+
+    # --- Validate each selected section ---
+    sections = []
+
+    if rent_selected:
         try:
-            amount_agreed = float(agreed_rent)
+            rent_amount = float(request.form.get("rent_amount", ""))
+            if rent_amount <= 0:
+                errors.append("Rent: Amount paid must be greater than zero.")
         except (ValueError, TypeError):
-            amount_agreed = None
+            errors.append("Rent: Amount paid is required.")
+            rent_amount = None
 
-    # If validation errors, re-render form
+        rent_tds_raw = request.form.get("rent_tds", "").strip()
+        rent_tds = None
+        if rent_tds_raw:
+            try:
+                rent_tds = float(rent_tds_raw)
+                if rent_tds < 0:
+                    errors.append("Rent: TDS deducted cannot be negative.")
+                elif rent_amount is not None and rent_tds > rent_amount:
+                    errors.append("Rent: TDS deducted cannot exceed amount paid.")
+            except (ValueError, TypeError):
+                errors.append("Rent: TDS deducted must be a number.")
+
+        rent_amount_agreed = None
+        if agreed_rent is not None:
+            try:
+                rent_amount_agreed = float(agreed_rent)
+            except (ValueError, TypeError):
+                pass
+
+        sections.append({
+            "type": "rent",
+            "amount": rent_amount,
+            "tds": rent_tds,
+            "amount_agreed": rent_amount_agreed,
+            "date_paid": request.form.get("rent_date_paid", "").strip() or None,
+            "proof_key": "rent_proof",
+        })
+
+    if maintenance_selected:
+        try:
+            maint_amount = float(request.form.get("maintenance_amount", ""))
+            if maint_amount <= 0:
+                errors.append("Maintenance: Amount paid must be greater than zero.")
+        except (ValueError, TypeError):
+            errors.append("Maintenance: Amount paid is required.")
+            maint_amount = None
+
+        sections.append({
+            "type": "maintenance",
+            "amount": maint_amount,
+            "tds": None,
+            "amount_agreed": None,
+            "date_paid": request.form.get("maintenance_date_paid", "").strip() or None,
+            "proof_key": "maintenance_proof",
+        })
+
+    if utilities_selected:
+        try:
+            util_amount = float(request.form.get("utilities_amount", ""))
+            if util_amount <= 0:
+                errors.append("Utilities: Amount paid must be greater than zero.")
+        except (ValueError, TypeError):
+            errors.append("Utilities: Amount paid is required.")
+            util_amount = None
+
+        sections.append({
+            "type": "utilities",
+            "amount": util_amount,
+            "tds": None,
+            "amount_agreed": None,
+            "date_paid": request.form.get("utilities_date_paid", "").strip() or None,
+            "proof_key": "utilities_proof",
+        })
+
+    # If any validation errors, reject entire submission
     if errors:
-        return render_template("tenant_confirm.html",
-                               token_valid=True,
-                               token=token,
-                               lease_group_id=lease_group_id,
-                               lease_nickname=lease_nickname,
-                               agreed_rent=agreed_rent,
-                               success=False,
-                               errors=errors,
-                               form=request.form)
+        return render_error(errors)
 
-    # --- Handle proof upload (before creating record) ---
-    payment_id = str(uuid.uuid4())
-    proof_files = []
-
-    proof_file = request.files.get("proof_file")
-    if proof_file and proof_file.filename:
-        relative_path, error = save_proof_file(lease_group_id, payment_id, proof_file)
-        if error:
-            errors.append(f"Proof upload failed: {error}")
-            return render_template("tenant_confirm.html",
-                                   token_valid=True,
-                                   token=token,
-                                   lease_group_id=lease_group_id,
-                                   lease_nickname=lease_nickname,
-                                   agreed_rent=agreed_rent,
-                                   success=False,
-                                   errors=errors,
-                                   form=request.form)
-        proof_files.append(relative_path)
-
-    # --- Build payment confirmation record (locked schema) ---
+    # --- Handle proof uploads for each section (before creating records) ---
     now = datetime.now().isoformat()
+    records = []
 
-    confirmation_record = {
-        "id": payment_id,
-        "lease_group_id": lease_group_id,
-        "confirmation_type": confirmation_type,
-        "period_month": period_month,
-        "period_year": period_year,
-        "amount_agreed": amount_agreed,
-        "amount_declared": amount_declared,
-        "tds_deducted": tds_deducted,
-        "date_paid": date_paid,
-        "proof_files": proof_files,
-        "verification_status": "unverified",
-        "disclaimer_acknowledged": now,
-        "submitted_at": now,
-        "submitted_via": "tenant_link",
-        "notes": notes,
-    }
+    for section in sections:
+        payment_id = str(uuid.uuid4())
+        proof_files = []
 
-    # --- Persist (append-only) ---
+        proof_file = request.files.get(section["proof_key"])
+        if proof_file and proof_file.filename:
+            relative_path, error = save_proof_file(lease_group_id, payment_id, proof_file)
+            if error:
+                return render_error([f"{section['type'].capitalize()}: Proof upload failed: {error}"])
+            proof_files.append(relative_path)
+
+        records.append({
+            "id": payment_id,
+            "lease_group_id": lease_group_id,
+            "confirmation_type": section["type"],
+            "period_month": period_month,
+            "period_year": period_year,
+            "amount_agreed": section["amount_agreed"],
+            "amount_declared": section["amount"],
+            "tds_deducted": section["tds"],
+            "date_paid": section["date_paid"],
+            "proof_files": proof_files,
+            "verification_status": "unverified",
+            "disclaimer_acknowledged": now,
+            "submitted_at": now,
+            "submitted_via": "tenant_link",
+            "notes": notes,
+        })
+
+    # --- Persist all records at once (no partial saves) ---
     payment_data = _load_all_payments()
-    payment_data["confirmations"].append(confirmation_record)
+    for record in records:
+        payment_data["confirmations"].append(record)
     saved = _save_payment_file(payment_data)
 
     if not saved:
-        return render_template("tenant_confirm.html",
-                               token_valid=True,
-                               token=token,
-                               lease_group_id=lease_group_id,
-                               lease_nickname=lease_nickname,
-                               agreed_rent=agreed_rent,
-                               success=False,
-                               errors=["Failed to save. Please try again."],
-                               form=request.form)
+        return render_error(["Failed to save. Please try again."])
 
     return render_template("tenant_confirm.html",
                            token_valid=True,

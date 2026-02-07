@@ -113,14 +113,6 @@
 
         <form method="POST" action="{{ url_for('tenant_confirm', token=token) }}" enctype="multipart/form-data">
 
-            <label for="confirmation_type">Payment Type</label>
-            <select id="confirmation_type" name="confirmation_type" required>
-                <option value="">-- Select --</option>
-                <option value="rent" {% if form and form.get('confirmation_type') == 'rent' %}selected{% endif %}>Rent</option>
-                <option value="maintenance" {% if form and form.get('confirmation_type') == 'maintenance' %}selected{% endif %}>Maintenance</option>
-                <option value="utilities" {% if form and form.get('confirmation_type') == 'utilities' %}selected{% endif %}>Utilities</option>
-            </select>
-
             <label for="period_month">Month</label>
             <select id="period_month" name="period_month" required>
                 <option value="">-- Select --</option>
@@ -140,21 +132,81 @@
                 {% endfor %}
             </select>
 
-            <label for="amount_declared">Amount Paid (&#8377;)</label>
-            <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">The amount you actually paid (before any TDS deduction)</span>
-            <input type="number" id="amount_declared" name="amount_declared" step="0.01" min="0.01" required
-                   value="{{ form.get('amount_declared', '') if form else '' }}">
+            <div style="margin-top: 20px; margin-bottom: 4px;">
+                <strong>What are you confirming?</strong>
+                <p style="font-size: 0.85em; color: #777; margin: 4px 0 0 0;">Select all that apply. Each selected item will be recorded separately.</p>
+            </div>
 
-            <label for="tds_deducted">TDS Deducted (&#8377;) <span style="font-weight:normal; color:#777;">— optional</span></label>
-            <input type="number" id="tds_deducted" name="tds_deducted" step="0.01" min="0"
-                   value="{{ form.get('tds_deducted', '') if form else '' }}">
+            {# ---- RENT SECTION ---- #}
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-top: 10px;">
+                <label style="display: inline; font-weight: normal; margin: 0; cursor: pointer;">
+                    <input type="checkbox" name="rent_selected" value="1" onchange="toggleSection('rent-fields', this.checked)"
+                           {% if form and form.get('rent_selected') %}checked{% endif %}>
+                    <strong>Rent</strong>
+                </label>
+                <div id="rent-fields" style="display: {% if form and form.get('rent_selected') %}block{% else %}none{% endif %}; margin-top: 10px;">
+                    <label for="rent_amount">Amount Paid (&#8377;)</label>
+                    <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">The amount you actually paid (before any TDS deduction)</span>
+                    <input type="number" id="rent_amount" name="rent_amount" step="0.01" min="0.01"
+                           value="{{ form.get('rent_amount', '') if form else '' }}">
 
-            <label for="date_paid">Date Paid <span style="font-weight:normal; color:#777;">— optional</span></label>
-            <input type="date" id="date_paid" name="date_paid"
-                   value="{{ form.get('date_paid', '') if form else '' }}">
+                    <label for="rent_tds">TDS Deducted (&#8377;) <span style="font-weight:normal; color:#777;">— optional</span></label>
+                    <input type="number" id="rent_tds" name="rent_tds" step="0.01" min="0"
+                           value="{{ form.get('rent_tds', '') if form else '' }}">
 
-            <label for="proof_file">Proof Screenshot <span style="font-weight:normal; color:#777;">— optional (PNG, JPG, PDF)</span></label>
-            <input type="file" id="proof_file" name="proof_file" accept=".png,.jpg,.jpeg,.pdf">
+                    <label for="rent_date_paid">Date Paid <span style="font-weight:normal; color:#777;">— optional</span></label>
+                    <input type="date" id="rent_date_paid" name="rent_date_paid"
+                           value="{{ form.get('rent_date_paid', '') if form else '' }}">
+
+                    <label for="rent_proof">Proof <span style="font-weight:normal; color:#777;">— optional (PNG, JPG, PDF)</span></label>
+                    <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">Upload proof related to this payment (optional).</span>
+                    <input type="file" id="rent_proof" name="rent_proof" accept=".png,.jpg,.jpeg,.pdf">
+                </div>
+            </div>
+
+            {# ---- MAINTENANCE SECTION ---- #}
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-top: 10px;">
+                <label style="display: inline; font-weight: normal; margin: 0; cursor: pointer;">
+                    <input type="checkbox" name="maintenance_selected" value="1" onchange="toggleSection('maintenance-fields', this.checked)"
+                           {% if form and form.get('maintenance_selected') %}checked{% endif %}>
+                    <strong>Maintenance</strong>
+                </label>
+                <div id="maintenance-fields" style="display: {% if form and form.get('maintenance_selected') %}block{% else %}none{% endif %}; margin-top: 10px;">
+                    <label for="maintenance_amount">Amount Paid (&#8377;)</label>
+                    <input type="number" id="maintenance_amount" name="maintenance_amount" step="0.01" min="0.01"
+                           value="{{ form.get('maintenance_amount', '') if form else '' }}">
+
+                    <label for="maintenance_date_paid">Date Paid <span style="font-weight:normal; color:#777;">— optional</span></label>
+                    <input type="date" id="maintenance_date_paid" name="maintenance_date_paid"
+                           value="{{ form.get('maintenance_date_paid', '') if form else '' }}">
+
+                    <label for="maintenance_proof">Proof <span style="font-weight:normal; color:#777;">— optional (PNG, JPG, PDF)</span></label>
+                    <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">Upload proof related to this payment (optional).</span>
+                    <input type="file" id="maintenance_proof" name="maintenance_proof" accept=".png,.jpg,.jpeg,.pdf">
+                </div>
+            </div>
+
+            {# ---- UTILITIES SECTION ---- #}
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-top: 10px;">
+                <label style="display: inline; font-weight: normal; margin: 0; cursor: pointer;">
+                    <input type="checkbox" name="utilities_selected" value="1" onchange="toggleSection('utilities-fields', this.checked)"
+                           {% if form and form.get('utilities_selected') %}checked{% endif %}>
+                    <strong>Utilities</strong>
+                </label>
+                <div id="utilities-fields" style="display: {% if form and form.get('utilities_selected') %}block{% else %}none{% endif %}; margin-top: 10px;">
+                    <label for="utilities_amount">Amount Paid (&#8377;)</label>
+                    <input type="number" id="utilities_amount" name="utilities_amount" step="0.01" min="0.01"
+                           value="{{ form.get('utilities_amount', '') if form else '' }}">
+
+                    <label for="utilities_date_paid">Date Paid <span style="font-weight:normal; color:#777;">— optional</span></label>
+                    <input type="date" id="utilities_date_paid" name="utilities_date_paid"
+                           value="{{ form.get('utilities_date_paid', '') if form else '' }}">
+
+                    <label for="utilities_proof">Proof <span style="font-weight:normal; color:#777;">— optional (PNG, JPG, PDF)</span></label>
+                    <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">Upload proof related to this payment (optional).</span>
+                    <input type="file" id="utilities_proof" name="utilities_proof" accept=".png,.jpg,.jpeg,.pdf">
+                </div>
+            </div>
 
             <label for="notes">Notes <span style="font-weight:normal; color:#777;">— optional</span></label>
             <textarea id="notes" name="notes">{{ form.get('notes', '') if form else '' }}</textarea>
@@ -164,6 +216,10 @@
                 Submitting this form does <strong>not</strong> verify or confirm that the payment was received.
                 Your landlord must independently verify all payments via their own bank records.
                 This record is for informational and audit purposes only.</p>
+                <p style="font-size: 0.85em; color: #777; margin-top: 8px;">
+                    If you forget something or need to add more details later,
+                    you can submit another confirmation. Previous entries cannot be changed.
+                </p>
                 <input type="checkbox" id="disclaimer_acknowledged" name="disclaimer_acknowledged" value="1" required>
                 <label for="disclaimer_acknowledged">I understand and acknowledge the above</label>
             </div>
@@ -171,6 +227,88 @@
             <button type="submit" class="btn">Submit Confirmation</button>
         </form>
     </div>
+
+    {% if payment_confirmations %}
+    <div class="card" style="margin-top: 20px;">
+        <h2 style="font-size: 1.2em; margin-top: 0;">Your past submissions</h2>
+        {% for pc in payment_confirmations %}
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+                <span style="font-weight: 600; font-size: 0.9em;">{{ pc.confirmation_type|capitalize if pc.confirmation_type else 'Unknown' }}</span>
+                <span style="color: #777; font-size: 0.85em;">
+                    {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][pc.period_month - 1] if pc.period_month else '?' }}
+                    {{ pc.period_year or '' }}
+                </span>
+                {% set convo = payment_conversation.get(pc.id, {"open": False, "thread": []}) %}
+                {% if convo.open %}
+                <span style="background: #fef3c7; color: #92400e; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Needs attention</span>
+                {% endif %}
+            </div>
+            <div style="font-size: 0.9em; color: #555;">
+                Amount paid: <strong>₹{{ "{:,.0f}".format(pc.amount_declared|float) if pc.amount_declared else '—' }}</strong>
+                <span style="color: #999; margin-left: 8px;">{{ pc.submitted_at[:10] if pc.submitted_at else '' }}</span>
+            </div>
+
+            {# ---- Conversation thread (tenant-visible events only) ---- #}
+            {% if convo.thread %}
+            <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+                {% for ev in convo.thread if ev.event_type in ('flagged', 'response') %}
+                <div style="margin-bottom: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#fffbeb{% endif %}; border: 1px solid {% if ev.actor == 'tenant' %}#bfdbfe{% else %}#fcd34d{% endif %}; border-radius: 6px; font-size: 0.85em;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        {% if ev.actor == 'tenant' %}
+                        <span style="font-weight: 600; color: #1e40af; font-size: 0.85em;">You</span>
+                        {% else %}
+                        <span style="font-weight: 600; color: #92400e; font-size: 0.85em;">Landlord</span>
+                        {% endif %}
+                        <span style="color: #999; font-size: 0.85em;">{{ ev.created_at[:10] if ev.created_at else '' }}</span>
+                    </div>
+                    {% if ev.message %}
+                    <div style="margin-top: 4px; color: #555;">{{ ev.message }}</div>
+                    {% endif %}
+                    {% if ev.attachments %}
+                    <div style="margin-top: 4px;">
+                        {% for att in ev.attachments %}
+                        {% set att_filename = att.split('/')[-1] %}
+                        <a href="{{ url_for('view_proof', lease_group_id=pc.lease_group_id, filename=att_filename) }}" target="_blank" style="color: #2563eb; font-size: 0.85em;">{{ att_filename }}</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                {% if convo.open %}
+                {# ---- Reply form ---- #}
+                <form method="POST" action="{{ url_for('tenant_payment_response', token=token, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-top: 8px;">
+                    <div style="margin-bottom: 6px;">
+                        <textarea name="message" rows="2" placeholder="Type your reply..." required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
+                        <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
+                    </div>
+                    <p style="font-size: 0.8em; color: #999; margin: 0 0 6px 0;">
+                        Your reply will be saved and shared with your landlord. Previous entries cannot be changed.
+                    </p>
+                    <button type="submit" class="btn" style="margin-top: 0; padding: 6px 16px; font-size: 0.85em;">Send reply</button>
+                </form>
+                {% else %}
+                {# ---- Closed indicator ---- #}
+                <div style="margin-top: 6px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 4px; font-size: 0.85em; color: #166534;">
+                    This issue has been resolved.
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <script>
+    function toggleSection(id, show) {
+        document.getElementById(id).style.display = show ? 'block' : 'none';
+    }
+    </script>
     {% endif %}
 
 </div>
