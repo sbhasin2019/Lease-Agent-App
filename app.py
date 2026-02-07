@@ -343,6 +343,173 @@ def _save_lease_file(data):
         return False
 
 
+# ----------------------------------------------------------------
+# PAYMENT CONFIRMATION SCHEMA (Phase 1 — documentation only)
+# ----------------------------------------------------------------
+# Each record in payment_data.json["confirmations"] will follow
+# this structure. No code relies on this yet.
+#
+# {
+#   "id":                       str (uuid),
+#   "lease_group_id":           str (uuid, links to lease group),
+#   "confirmation_type":        "rent" | "maintenance" | "utilities",
+#   "period_month":             int (1–12),
+#   "period_year":              int (YYYY),
+#   "amount_agreed":            number | null (rent only; null for others),
+#   "amount_declared":          number,
+#   "tds_deducted":             number | null,
+#   "date_paid":                str (ISO date, YYYY-MM-DD) | null,
+#   "proof_files":              list of str (relative file paths),
+#   "verification_status":      "unverified" (ALWAYS in Phase 1),
+#   "disclaimer_acknowledged":  bool or ISO timestamp,
+#   "submitted_at":             str (ISO timestamp),
+#   "submitted_via":            "tenant_link" | "landlord_manual",
+#   "notes":                    str | null
+# }
+#
+# Rules:
+# - Records are append-only (no edits, no deletes)
+# - Corrections are new records, not mutations
+# - Multiple submissions per month are allowed
+# - verification_status is always "unverified" in Phase 1
+# - amount_agreed comes from the lease; amount_declared from tenant
+# - Only "rent" type uses amount_agreed; others are declaration-only
+# - "Submitted" never means "verified"
+# ----------------------------------------------------------------
+
+# ----------------------------------------------------------------
+# TENANT TOKEN SCHEMA (Phase 1 — documentation only)
+# ----------------------------------------------------------------
+# Each record in tenant_access.json["tenant_tokens"] will follow
+# this structure. No code relies on this yet.
+#
+# {
+#   "token":                    str (cryptographically secure random string),
+#   "lease_group_id":           str (uuid, links to lease group),
+#   "is_active":                bool,
+#   "issued_at":                str (ISO timestamp),
+#   "revoked_at":               str (ISO timestamp) | null,
+#   "revoked_reason":           str | null,
+#   "last_used_at":             str (ISO timestamp) | null
+# }
+#
+# Rules:
+# - Tokens are bound to lease_group_id (survive renewals)
+# - Landlord can revoke and regenerate tokens
+# - If tenant changes on renewal, landlord is prompted to decide
+# - Token validity is checked against lease_group's active lease
+# - Anyone with the token can submit (no identity verification)
+# ----------------------------------------------------------------
+
+
+def _load_all_payments():
+    """Load the full payment confirmation collection from JSON file.
+
+    Returns:
+        dict: {"confirmations": [...]} structure,
+              or {"confirmations": []} if file is missing or invalid
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payment_data.json")
+
+    if not os.path.exists(json_path):
+        return {"confirmations": []}
+
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if not content.strip():
+            return {"confirmations": []}
+
+        data = json.loads(content)
+        return data
+
+    except json.JSONDecodeError:
+        return {"confirmations": []}
+    except IOError:
+        return {"confirmations": []}
+
+
+def _save_payment_file(data):
+    """Atomically save payment data to JSON file.
+
+    Returns:
+        bool: True on success, False on failure
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payment_data.json")
+    tmp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payment_data.tmp")
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, json_path)
+        return True
+    except (IOError, OSError):
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
+def _load_all_tenant_access():
+    """Load the full tenant access token collection from JSON file.
+
+    Returns:
+        dict: {"tenant_tokens": [...]} structure,
+              or {"tenant_tokens": []} if file is missing or invalid
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tenant_access.json")
+
+    if not os.path.exists(json_path):
+        return {"tenant_tokens": []}
+
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if not content.strip():
+            return {"tenant_tokens": []}
+
+        data = json.loads(content)
+        return data
+
+    except json.JSONDecodeError:
+        return {"tenant_tokens": []}
+    except IOError:
+        return {"tenant_tokens": []}
+
+
+def _save_tenant_access_file(data):
+    """Atomically save tenant access data to JSON file.
+
+    Returns:
+        bool: True on success, False on failure
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tenant_access.json")
+    tmp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tenant_access.tmp")
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, json_path)
+        return True
+    except (IOError, OSError):
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
 def _load_all_leases():
     """Load the full lease collection from JSON file.
 

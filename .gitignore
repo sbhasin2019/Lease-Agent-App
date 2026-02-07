@@ -5,6 +5,8 @@ __pycache__/
 
 # App data (DO NOT COMMIT)
 lease_data.json
+payment_data.json
+tenant_access.json
 uploads/
 
 # macOS
