@@ -551,7 +551,120 @@ Additional notes:
 
 This step establishes infrastructure only.
 No user-visible behaviour has changed.
+
+-----------------------------------------------------------------------
+
+  Step 2: Define and Lock Payment Confirmation Data Model
+  Status: LOCKED & AUTHORITATIVE
+  Date: 7 February 2026
+
+  This step finalizes the data model for tenant payment confirmations
+  and tenant access tokens. These schemas are authoritative and MUST
+  NOT be modified, extended, or partially implemented without explicit
+  scope approval.
+
+  NO UI, routes, validation logic, or business logic implemented.
+
+  A. Payment Confirmation Schema (payment_data.json["confirmations"])
+
+  Each record:
+  {
+    "id":                       str (uuid4)
+    "lease_group_id":           str (uuid4, links to lease group)
+    "confirmation_type":        "rent" | "maintenance" | "utilities"
+    "period_month":             int (1-12)
+    "period_year":              int (YYYY)
+    "amount_agreed":            number | null (rent only; null for others)
+    "amount_declared":          number (required, positive)
+    "tds_deducted":             number | null (null ≠ 0)
+    "date_paid":                str (ISO date YYYY-MM-DD) | null
+    "proof_files":              list of str (relative file paths)
+    "verification_status":      "unverified" (ALWAYS in Phase 1)
+    "disclaimer_acknowledged":  str (ISO timestamp, required)
+    "submitted_at":             str (ISO timestamp, server-generated)
+    "submitted_via":            "tenant_link" | "landlord_manual"
+    "notes":                    str | null
+  }
+
+  Immutability rule:
+  - The confirmations list is append-only
+  - Every record is frozen at creation — no field is ever changed
+    after writing, including proof_files
+  - Corrections or missing proof: submit a NEW record
+
+  Key rules:
+  - verification_status is always "unverified" in Phase 1
+  - Only "rent" uses amount_agreed (copied from lease at submission)
+  - Maintenance and utilities are declaration-only
+  - Multiple submissions per month are allowed
+  - Period determined solely by (period_month, period_year)
+  - "Submitted" or "declared" never means "verified"
+  - tds_deducted: null = not provided; 0 = explicitly no TDS
+
+  B. Tenant Token Schema (tenant_access.json["tenant_tokens"])
+
+  Each record:
+  {
+    "token":                    str (secrets.token_urlsafe(32), ~43 chars)
+    "lease_group_id":           str (uuid4, links to lease group)
+    "is_active":                bool (mutable)
+    "issued_at":                str (ISO timestamp)
+    "revoked_at":               str (ISO timestamp) | null (write-once)
+    "revoked_reason":           str | null (write-once)
+    "last_used_at":             str (ISO timestamp) | null (mutable)
+  }
+
+  Rules:
+  - token string IS the identifier (no separate id field)
+  - Bound to lease_group_id (survives renewals)
+  - At most ONE active token per lease_group_id at any time
+  - Revoking a token NEVER deletes payment history
+  - Token validity: is_active AND lease has unexpired current version
+  - Only is_active and last_used_at are mutable after creation
+  - revoked_at and revoked_reason are write-once (set at revocation)
+
+  C. What changed from Step 1 schema comments:
+  - disclaimer_acknowledged narrowed from "bool or ISO timestamp"
+    to "str (ISO timestamp)" only — stronger audit trail
+  - Immutability rule clarified: "append-only" applies to the
+    collection, not to arrays within a record
+  - All other fields unchanged from Step 1 documentation
+
 ----------------------------------------------------------------
+
+  Step 3: Proof File Storage & Serving Infrastructure
+  Status: IMPLEMENTED
+  Date: 7 February 2026
+
+  What was added:
+  - PROOF_UPLOAD_FOLDER constant (uploads/proofs/)
+    - Directory created at startup if missing
+    - Already covered by existing uploads/ gitignore rule
+  - PROOF_ALLOWED_EXTENSIONS set (png, jpg, jpeg, pdf)
+    - Deliberately separate from ALLOWED_EXTENSIONS
+    - Controls what can be SERVED, independent of upload rules
+  - save_proof_file(lease_group_id, payment_id, file) helper
+    - Validates file extension via existing allowed_file()
+    - Creates uploads/proofs/{lease_group_id}/ if missing
+    - Names files as {payment_id}_{secure_filename}
+    - Never overwrites existing files (immutability rule)
+    - Returns relative path for JSON storage
+    - NOT called anywhere yet
+  - /view_proof/<lease_group_id>/<filename> GET route
+    - Serves proof files (images and PDFs)
+    - Validates extension against PROOF_ALLOWED_EXTENSIONS
+    - Path traversal protected by send_from_directory
+    - No authentication or token checks (Phase 1)
+
+  What was NOT changed:
+  - No templates modified
+  - No existing routes modified
+  - No schema changes
+  - No lease logic touched
+  - No payment submission logic added
+
+  This step establishes proof file infrastructure only.
+  No user-visible behaviour has changed.
 
 ----------------------------------------------------------------
 UPDATED - 6 FEBRUARY 2026

@@ -82,6 +82,61 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+# ----------------------------------------------------------------
+# Proof file upload infrastructure (Phase 1 Step 3)
+# ----------------------------------------------------------------
+PROOF_UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, "proofs")
+os.makedirs(PROOF_UPLOAD_FOLDER, exist_ok=True)
+
+# Explicit allowed extensions for SERVING proof files.
+# Kept separate from ALLOWED_EXTENSIONS so upload and serving
+# rules remain independent.
+PROOF_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
+
+
+def save_proof_file(lease_group_id, payment_id, file):
+    """Save a proof file to uploads/proofs/{lease_group_id}/.
+
+    Files are immutable once written — never overwritten or deleted.
+
+    Args:
+        lease_group_id: UUID string of the lease group
+        payment_id: UUID string of the payment confirmation
+        file: Werkzeug FileStorage object from form upload
+
+    Returns:
+        tuple: (relative_path, None) on success,
+               (None, error_message) on failure
+    """
+    if not file or not file.filename:
+        return None, "No file provided"
+
+    if not allowed_file(file.filename):
+        return None, "File type not allowed"
+
+    original_name = secure_filename(file.filename)
+    if not original_name:
+        return None, "Invalid filename"
+
+    # Build directory: uploads/proofs/{lease_group_id}/
+    lease_proof_dir = os.path.join(PROOF_UPLOAD_FOLDER, lease_group_id)
+    os.makedirs(lease_proof_dir, exist_ok=True)
+
+    # Build filename: {payment_id}_{original_name}
+    safe_name = f"{payment_id}_{original_name}"
+    full_path = os.path.join(lease_proof_dir, safe_name)
+
+    # Never overwrite existing files (immutability rule)
+    if os.path.exists(full_path):
+        return None, "File already exists"
+
+    file.save(full_path)
+
+    # Return relative path for JSON storage (relative to uploads/)
+    relative_path = os.path.join("proofs", lease_group_id, safe_name)
+    return relative_path, None
+
+
 def extract_text_from_image(file_path):
     """Extract text from image using OCR."""
     try:
@@ -344,61 +399,74 @@ def _save_lease_file(data):
 
 
 # ----------------------------------------------------------------
-# PAYMENT CONFIRMATION SCHEMA (Phase 1 — documentation only)
+# PAYMENT CONFIRMATION SCHEMA (Phase 1 — LOCKED & AUTHORITATIVE)
 # ----------------------------------------------------------------
-# Each record in payment_data.json["confirmations"] will follow
-# this structure. No code relies on this yet.
+# Each record in payment_data.json["confirmations"] follows this
+# structure. This schema is locked. Do NOT add, remove, or rename
+# fields without explicit scope approval.
 #
 # {
-#   "id":                       str (uuid),
-#   "lease_group_id":           str (uuid, links to lease group),
+#   "id":                       str (uuid4),
+#   "lease_group_id":           str (uuid4, links to lease group),
 #   "confirmation_type":        "rent" | "maintenance" | "utilities",
 #   "period_month":             int (1–12),
 #   "period_year":              int (YYYY),
 #   "amount_agreed":            number | null (rent only; null for others),
-#   "amount_declared":          number,
-#   "tds_deducted":             number | null,
-#   "date_paid":                str (ISO date, YYYY-MM-DD) | null,
+#   "amount_declared":          number (required, positive),
+#   "tds_deducted":             number | null (null ≠ 0),
+#   "date_paid":                str (ISO date YYYY-MM-DD) | null,
 #   "proof_files":              list of str (relative file paths),
 #   "verification_status":      "unverified" (ALWAYS in Phase 1),
-#   "disclaimer_acknowledged":  bool or ISO timestamp,
-#   "submitted_at":             str (ISO timestamp),
+#   "disclaimer_acknowledged":  str (ISO timestamp, required),
+#   "submitted_at":             str (ISO timestamp, server-generated),
 #   "submitted_via":            "tenant_link" | "landlord_manual",
 #   "notes":                    str | null
 # }
 #
 # Rules:
-# - Records are append-only (no edits, no deletes)
-# - Corrections are new records, not mutations
+# - The confirmations list is append-only: new records are added,
+#   existing records are NEVER modified or deleted
+# - Every record is frozen at creation — no field is changed after
+#   writing, including proof_files
+# - Corrections or missing proof: submit a NEW record
 # - Multiple submissions per month are allowed
 # - verification_status is always "unverified" in Phase 1
 # - amount_agreed comes from the lease; amount_declared from tenant
 # - Only "rent" type uses amount_agreed; others are declaration-only
-# - "Submitted" never means "verified"
+# - "Submitted" or "declared" never means "verified"
+# - tds_deducted: null = not provided; 0 = explicitly no TDS
+# - Period is determined solely by (period_month, period_year),
+#   NOT by date_paid or submitted_at
 # ----------------------------------------------------------------
 
 # ----------------------------------------------------------------
-# TENANT TOKEN SCHEMA (Phase 1 — documentation only)
+# TENANT TOKEN SCHEMA (Phase 1 — LOCKED & AUTHORITATIVE)
 # ----------------------------------------------------------------
-# Each record in tenant_access.json["tenant_tokens"] will follow
-# this structure. No code relies on this yet.
+# Each record in tenant_access.json["tenant_tokens"] follows this
+# structure. This schema is locked. Do NOT add, remove, or rename
+# fields without explicit scope approval.
 #
 # {
-#   "token":                    str (cryptographically secure random string),
-#   "lease_group_id":           str (uuid, links to lease group),
-#   "is_active":                bool,
+#   "token":                    str (secrets.token_urlsafe(32), ~43 chars),
+#   "lease_group_id":           str (uuid4, links to lease group),
+#   "is_active":                bool (mutable — only access control field),
 #   "issued_at":                str (ISO timestamp),
-#   "revoked_at":               str (ISO timestamp) | null,
-#   "revoked_reason":           str | null,
-#   "last_used_at":             str (ISO timestamp) | null
+#   "revoked_at":               str (ISO timestamp) | null (write-once),
+#   "revoked_reason":           str | null (write-once),
+#   "last_used_at":             str (ISO timestamp) | null (mutable)
 # }
 #
 # Rules:
+# - token string IS the identifier (no separate id field)
 # - Tokens are bound to lease_group_id (survive renewals)
+# - At most ONE active token per lease_group_id at any time
 # - Landlord can revoke and regenerate tokens
 # - If tenant changes on renewal, landlord is prompted to decide
-# - Token validity is checked against lease_group's active lease
+# - Revoking a token NEVER deletes payment history
+# - Token validity: is_active AND lease has unexpired current version
 # - Anyone with the token can submit (no identity verification)
+# - Only is_active and last_used_at are mutable after creation
+# - revoked_at and revoked_reason are write-once (set at revocation)
 # ----------------------------------------------------------------
 
 
@@ -1875,6 +1943,24 @@ def view_pdf(filename):
         filename,
         mimetype="application/pdf"
     )
+
+
+@app.route("/view_proof/<lease_group_id>/<filename>")
+def view_proof(lease_group_id, filename):
+    """Serve a proof file from uploads/proofs/{lease_group_id}/.
+
+    Read-only. Validates against PROOF_ALLOWED_EXTENSIONS (independent
+    of upload rules). Path traversal prevented by send_from_directory.
+    """
+    # Validate extension against proof-specific serving rules
+    if not ("." in filename and
+            filename.rsplit(".", 1)[1].lower() in PROOF_ALLOWED_EXTENSIONS):
+        flash("Invalid file type.", "error")
+        return redirect(url_for("index"))
+
+    proof_dir = os.path.join(PROOF_UPLOAD_FOLDER, secure_filename(lease_group_id))
+
+    return send_from_directory(proof_dir, filename)
 
 
 if __name__ == "__main__":
