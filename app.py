@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 import calendar
 import uuid
+import secrets
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
@@ -63,6 +64,9 @@ def format_date_filter(date_str):
         return dt.strftime("%-d %b %Y")
     except (ValueError, TypeError):
         return str(date_str)
+
+# Make datetime.now available in templates (used for year dropdowns)
+app.jinja_env.globals["now"] = datetime.now
 
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
@@ -463,7 +467,7 @@ def _save_lease_file(data):
 # - Landlord can revoke and regenerate tokens
 # - If tenant changes on renewal, landlord is prompted to decide
 # - Revoking a token NEVER deletes payment history
-# - Token validity: is_active AND lease has unexpired current version
+# - Token validity: is_active == true (lease expiry does NOT affect validity in Phase 1)
 # - Anyone with the token can submit (no identity verification)
 # - Only is_active and last_used_at are mutable after creation
 # - revoked_at and revoked_reason are write-once (set at revocation)
@@ -576,6 +580,160 @@ def _save_tenant_access_file(data):
             except OSError:
                 pass
         return False
+
+
+def generate_tenant_token(lease_group_id):
+    """Generate a new tenant access token for a lease group.
+
+    Rules:
+    - lease_group_id must exist in lease_data.json
+    - At most ONE active token per lease_group_id
+    - If an active token already exists, FAILS (does not auto-revoke)
+
+    Returns:
+        dict: {"success": True, "token_record": {...}} or
+              {"success": False, "error": "..."}
+    """
+    # Verify lease_group_id exists
+    lease_data = _load_all_leases()
+    lease_exists = any(
+        lease.get("lease_group_id") == lease_group_id
+        for lease in lease_data.get("leases", [])
+    )
+    if not lease_exists:
+        return {"success": False, "error": "lease_group_not_found"}
+
+    # Check for existing active token
+    access_data = _load_all_tenant_access()
+    tokens = access_data.get("tenant_tokens", [])
+    for t in tokens:
+        if t.get("lease_group_id") == lease_group_id and t.get("is_active"):
+            return {"success": False, "error": "active_token_exists"}
+
+    # Create new token record (matches locked schema exactly)
+    token_record = {
+        "token": secrets.token_urlsafe(32),
+        "lease_group_id": lease_group_id,
+        "is_active": True,
+        "issued_at": datetime.now().isoformat(),
+        "revoked_at": None,
+        "revoked_reason": None,
+        "last_used_at": None,
+    }
+
+    tokens.append(token_record)
+    access_data["tenant_tokens"] = tokens
+    saved = _save_tenant_access_file(access_data)
+
+    if not saved:
+        return {"success": False, "error": "save_failed"}
+
+    return {"success": True, "token_record": token_record}
+
+
+def validate_token(token):
+    """Validate a tenant access token. Read-only, no side effects.
+
+    A token is valid if and only if is_active == true.
+    Does NOT check lease data or lease expiry.
+
+    Returns:
+        dict: {"valid": True, "lease_group_id": "...", "token_record": {...}} or
+              {"valid": False, "reason": "not_found" | "revoked" | "inactive"}
+    """
+    access_data = _load_all_tenant_access()
+    tokens = access_data.get("tenant_tokens", [])
+
+    for t in tokens:
+        if t.get("token") == token:
+            if t.get("is_active"):
+                return {
+                    "valid": True,
+                    "lease_group_id": t["lease_group_id"],
+                    "token_record": t,
+                }
+            # Inactive — determine reason
+            if t.get("revoked_at") is not None:
+                return {"valid": False, "reason": "revoked"}
+            return {"valid": False, "reason": "inactive"}
+
+    return {"valid": False, "reason": "not_found"}
+
+
+def revoke_tenant_token(token, reason=None):
+    """Revoke a tenant access token. Landlord-initiated only.
+
+    Rules:
+    - Sets is_active = false
+    - Sets revoked_at (write-once)
+    - revoked_reason is optional (may be null)
+    - NEVER deletes or alters payment history
+
+    Returns:
+        dict: {"success": True, "token_record": {...}} or
+              {"success": False, "error": "..."}
+    """
+    access_data = _load_all_tenant_access()
+    tokens = access_data.get("tenant_tokens", [])
+
+    for t in tokens:
+        if t.get("token") == token:
+            if not t.get("is_active"):
+                return {"success": False, "error": "already_revoked"}
+
+            t["is_active"] = False
+            t["revoked_at"] = datetime.now().isoformat()
+            t["revoked_reason"] = reason
+
+            saved = _save_tenant_access_file(access_data)
+            if not saved:
+                return {"success": False, "error": "save_failed"}
+
+            return {"success": True, "token_record": t}
+
+    return {"success": False, "error": "token_not_found"}
+
+
+def get_active_token_for_lease_group(lease_group_id):
+    """Fetch the active token for a lease group, if one exists.
+
+    Returns:
+        dict: The token record, or None if no active token exists.
+    """
+    access_data = _load_all_tenant_access()
+    tokens = access_data.get("tenant_tokens", [])
+
+    for t in tokens:
+        if t.get("lease_group_id") == lease_group_id and t.get("is_active"):
+            return t
+
+    return None
+
+
+def get_all_tokens_for_lease_group(lease_group_id):
+    """Fetch all tokens (active and revoked) for a lease group.
+
+    Returns:
+        list: All token records for this lease group, newest first.
+    """
+    access_data = _load_all_tenant_access()
+    tokens = access_data.get("tenant_tokens", [])
+    matching = [t for t in tokens if t.get("lease_group_id") == lease_group_id]
+    matching.sort(key=lambda t: t.get("issued_at", ""), reverse=True)
+    return matching
+
+
+def get_payments_for_lease_group(lease_group_id):
+    """Fetch all payment confirmations for a lease group. Read-only.
+
+    Returns:
+        list: Confirmation records, newest first.
+    """
+    payment_data = _load_all_payments()
+    confirmations = payment_data.get("confirmations", [])
+    matching = [c for c in confirmations if c.get("lease_group_id") == lease_group_id]
+    matching.sort(key=lambda c: c.get("submitted_at", ""), reverse=True)
+    return matching
 
 
 def _load_all_leases():
@@ -1380,6 +1538,56 @@ def index():
             if previous_version:
                 version_changes = compare_lease_versions(lease_data, previous_version)
 
+    # Load tenant access and payment data for view mode
+    tenant_tokens = []
+    active_tenant_token = None
+    payment_confirmations = []
+    if lease_data and not edit_mode:
+        tenant_tokens = get_all_tokens_for_lease_group(lease_group_id)
+        active_tenant_token = next((t for t in tenant_tokens if t.get("is_active")), None)
+        payment_confirmations = get_payments_for_lease_group(lease_group_id)
+
+    # Compute monthly submission summary (Step 9)
+    monthly_summary = []
+    if payment_confirmations is not None and lease_data and not edit_mode:
+        month_names = ["January", "February", "March", "April", "May", "June",
+                       "July", "August", "September", "October", "November", "December"]
+        start_year, start_month = None, None
+
+        # Priority 1: lease start date
+        cv = lease_data.get("current_values") or {}
+        lease_start = cv.get("lease_start_date")
+        if lease_start:
+            try:
+                parts = lease_start.split("-")
+                start_year, start_month = int(parts[0]), int(parts[1])
+            except (ValueError, IndexError):
+                pass
+
+        # Priority 2: earliest submission period
+        if start_year is None and payment_confirmations:
+            earliest = min(payment_confirmations,
+                           key=lambda c: (c.get("period_year", 9999), c.get("period_month", 13)))
+            start_year = earliest.get("period_year")
+            start_month = earliest.get("period_month")
+
+        if start_year and start_month:
+            now = datetime.now()
+            end_year, end_month = now.year, now.month
+            y, m = start_year, start_month
+            while (y, m) <= (end_year, end_month):
+                count = sum(1 for c in payment_confirmations
+                            if c.get("period_year") == y and c.get("period_month") == m)
+                monthly_summary.append({
+                    "year": y, "month": m,
+                    "month_name": month_names[m - 1],
+                    "count": count,
+                })
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+
     return render_template("index.html",
                            uploads=uploads,
                            lease_data=lease_data,
@@ -1390,7 +1598,11 @@ def index():
                            renew_from=renew_from,
                            renew_from_lease=renew_from_lease,
                            lease_versions=lease_versions,
-                           version_changes=version_changes)
+                           version_changes=version_changes,
+                           tenant_tokens=tenant_tokens,
+                           active_tenant_token=active_tenant_token,
+                           payment_confirmations=payment_confirmations,
+                           monthly_summary=monthly_summary)
 
 
 @app.route("/upload", methods=["POST"])
@@ -1961,6 +2173,283 @@ def view_proof(lease_group_id, filename):
     proof_dir = os.path.join(PROOF_UPLOAD_FOLDER, secure_filename(lease_group_id))
 
     return send_from_directory(proof_dir, filename)
+
+
+# ----------------------------------------------------------------
+# LANDLORD TENANT ACCESS MANAGEMENT (Phase 1 — Step 7)
+# ----------------------------------------------------------------
+
+@app.route("/lease/<lease_group_id>/generate-token", methods=["POST"])
+def generate_token_route(lease_group_id):
+    """Landlord action: generate a tenant access link."""
+    result = generate_tenant_token(lease_group_id)
+    # Find a lease_id in this group to redirect back to
+    leases = _load_all_leases().get("leases", [])
+    redirect_lease_id = None
+    for l in leases:
+        if l.get("lease_group_id") == lease_group_id and l.get("is_current"):
+            redirect_lease_id = l.get("id")
+            break
+    if result.get("success"):
+        flash("Tenant access link generated.", "success")
+    else:
+        error = result.get("error", "unknown")
+        if error == "active_token_exists":
+            flash("An active tenant link already exists for this lease.", "error")
+        elif error == "lease_group_not_found":
+            flash("Lease not found.", "error")
+        else:
+            flash("Failed to generate tenant link.", "error")
+    return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+
+@app.route("/lease/<lease_group_id>/revoke-token", methods=["POST"])
+def revoke_token_route(lease_group_id):
+    """Landlord action: revoke a tenant access link."""
+    token = request.form.get("token", "").strip()
+    reason = request.form.get("revoke_reason", "").strip() or None
+    # Find a lease_id in this group to redirect back to
+    leases = _load_all_leases().get("leases", [])
+    redirect_lease_id = None
+    for l in leases:
+        if l.get("lease_group_id") == lease_group_id and l.get("is_current"):
+            redirect_lease_id = l.get("id")
+            break
+    if not token:
+        flash("No token specified.", "error")
+        return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+    result = revoke_tenant_token(token, reason=reason)
+    if result.get("success"):
+        flash("Tenant access has been revoked.", "success")
+    else:
+        error = result.get("error", "unknown")
+        if error == "already_revoked":
+            flash("This link was already revoked.", "error")
+        else:
+            flash("Failed to revoke tenant link.", "error")
+    return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+
+# ----------------------------------------------------------------
+# TENANT ACCESS ROUTES (Phase 1 — Step 5)
+# ----------------------------------------------------------------
+
+@app.route("/tenant/<token>")
+def tenant_page(token):
+    """Tenant-facing payment confirmation page.
+
+    Validates token, loads minimal lease context, renders form.
+    Does NOT modify any data.
+    """
+    result = validate_token(token)
+
+    if not result["valid"]:
+        return render_template("tenant_confirm.html",
+                               token_valid=False,
+                               error_reason=result["reason"])
+
+    lease_group_id = result["lease_group_id"]
+
+    # Load current lease for context (read-only)
+    lease_data = _load_all_leases()
+    current_lease = None
+    for lease in lease_data.get("leases", []):
+        if (lease.get("lease_group_id") == lease_group_id
+                and lease.get("is_current")):
+            current_lease = lease
+            break
+
+    # Extract display context from current lease (if it exists)
+    lease_nickname = None
+    agreed_rent = None
+    if current_lease:
+        cv = current_lease.get("current_values", {})
+        lease_nickname = cv.get("lease_nickname") or "Untitled Lease"
+        agreed_rent = cv.get("monthly_rent")
+
+    return render_template("tenant_confirm.html",
+                           token_valid=True,
+                           token=token,
+                           lease_group_id=lease_group_id,
+                           lease_nickname=lease_nickname,
+                           agreed_rent=agreed_rent,
+                           success=False)
+
+
+@app.route("/tenant/<token>/confirm", methods=["POST"])
+def tenant_confirm(token):
+    """Accept and persist a tenant payment confirmation.
+
+    Validates token again (do NOT trust GET).
+    Creates a new append-only payment record.
+    Never modifies existing records or proof files.
+    """
+    # Re-validate token (do not trust prior GET)
+    result = validate_token(token)
+
+    if not result["valid"]:
+        return render_template("tenant_confirm.html",
+                               token_valid=False,
+                               error_reason=result["reason"])
+
+    lease_group_id = result["lease_group_id"]
+
+    # Load current lease for amount_agreed (rent only)
+    lease_data = _load_all_leases()
+    current_lease = None
+    for lease in lease_data.get("leases", []):
+        if (lease.get("lease_group_id") == lease_group_id
+                and lease.get("is_current")):
+            current_lease = lease
+            break
+
+    lease_nickname = None
+    agreed_rent = None
+    if current_lease:
+        cv = current_lease.get("current_values", {})
+        lease_nickname = cv.get("lease_nickname") or "Untitled Lease"
+        agreed_rent = cv.get("monthly_rent")
+
+    # --- Extract and validate form data ---
+    errors = []
+
+    confirmation_type = request.form.get("confirmation_type", "").strip()
+    if confirmation_type not in ("rent", "maintenance", "utilities"):
+        errors.append("Invalid payment type.")
+
+    try:
+        period_month = int(request.form.get("period_month", ""))
+        if not (1 <= period_month <= 12):
+            errors.append("Month must be between 1 and 12.")
+    except (ValueError, TypeError):
+        errors.append("Month is required.")
+        period_month = None
+
+    current_year = datetime.now().year
+    try:
+        period_year = int(request.form.get("period_year", ""))
+        if not (2020 <= period_year <= current_year + 1):
+            errors.append(f"Year must be between 2020 and {current_year + 1}.")
+    except (ValueError, TypeError):
+        errors.append("Year is required.")
+        period_year = None
+
+    try:
+        amount_declared = float(request.form.get("amount_declared", ""))
+        if amount_declared <= 0:
+            errors.append("Amount declared must be greater than zero.")
+    except (ValueError, TypeError):
+        errors.append("Amount declared is required.")
+        amount_declared = None
+
+    # TDS: distinguish between not provided (null) and explicitly zero
+    tds_raw = request.form.get("tds_deducted", "").strip()
+    tds_deducted = None
+    if tds_raw:
+        try:
+            tds_deducted = float(tds_raw)
+            if tds_deducted < 0:
+                errors.append("TDS deducted cannot be negative.")
+            elif amount_declared is not None and tds_deducted > amount_declared:
+                errors.append("TDS deducted cannot exceed amount declared.")
+        except (ValueError, TypeError):
+            errors.append("TDS deducted must be a number.")
+
+    # date_paid is optional
+    date_paid = request.form.get("date_paid", "").strip() or None
+
+    # notes is optional
+    notes = request.form.get("notes", "").strip() or None
+
+    # Disclaimer must be acknowledged
+    disclaimer_checked = request.form.get("disclaimer_acknowledged")
+    if not disclaimer_checked:
+        errors.append("You must acknowledge the disclaimer to submit.")
+
+    # amount_agreed: only for rent, copied from lease (not from form)
+    amount_agreed = None
+    if confirmation_type == "rent" and agreed_rent is not None:
+        try:
+            amount_agreed = float(agreed_rent)
+        except (ValueError, TypeError):
+            amount_agreed = None
+
+    # If validation errors, re-render form
+    if errors:
+        return render_template("tenant_confirm.html",
+                               token_valid=True,
+                               token=token,
+                               lease_group_id=lease_group_id,
+                               lease_nickname=lease_nickname,
+                               agreed_rent=agreed_rent,
+                               success=False,
+                               errors=errors,
+                               form=request.form)
+
+    # --- Handle proof upload (before creating record) ---
+    payment_id = str(uuid.uuid4())
+    proof_files = []
+
+    proof_file = request.files.get("proof_file")
+    if proof_file and proof_file.filename:
+        relative_path, error = save_proof_file(lease_group_id, payment_id, proof_file)
+        if error:
+            errors.append(f"Proof upload failed: {error}")
+            return render_template("tenant_confirm.html",
+                                   token_valid=True,
+                                   token=token,
+                                   lease_group_id=lease_group_id,
+                                   lease_nickname=lease_nickname,
+                                   agreed_rent=agreed_rent,
+                                   success=False,
+                                   errors=errors,
+                                   form=request.form)
+        proof_files.append(relative_path)
+
+    # --- Build payment confirmation record (locked schema) ---
+    now = datetime.now().isoformat()
+
+    confirmation_record = {
+        "id": payment_id,
+        "lease_group_id": lease_group_id,
+        "confirmation_type": confirmation_type,
+        "period_month": period_month,
+        "period_year": period_year,
+        "amount_agreed": amount_agreed,
+        "amount_declared": amount_declared,
+        "tds_deducted": tds_deducted,
+        "date_paid": date_paid,
+        "proof_files": proof_files,
+        "verification_status": "unverified",
+        "disclaimer_acknowledged": now,
+        "submitted_at": now,
+        "submitted_via": "tenant_link",
+        "notes": notes,
+    }
+
+    # --- Persist (append-only) ---
+    payment_data = _load_all_payments()
+    payment_data["confirmations"].append(confirmation_record)
+    saved = _save_payment_file(payment_data)
+
+    if not saved:
+        return render_template("tenant_confirm.html",
+                               token_valid=True,
+                               token=token,
+                               lease_group_id=lease_group_id,
+                               lease_nickname=lease_nickname,
+                               agreed_rent=agreed_rent,
+                               success=False,
+                               errors=["Failed to save. Please try again."],
+                               form=request.form)
+
+    return render_template("tenant_confirm.html",
+                           token_valid=True,
+                           token=token,
+                           lease_group_id=lease_group_id,
+                           lease_nickname=lease_nickname,
+                           agreed_rent=agreed_rent,
+                           success=True)
 
 
 if __name__ == "__main__":

@@ -2540,6 +2540,195 @@
                 Delete Lease
             </button>
         </div>
+
+        {# ---- TENANT ACCESS SECTION (Step 7) ---- #}
+        <div class="tenant-access-section" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <h3 style="font-size: 1.1em; margin-bottom: 12px;">Tenant Access</h3>
+
+            {% if active_tenant_token %}
+            {# ACTIVE TOKEN STATE #}
+            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="background: #16a34a; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Active</span>
+                    <span style="color: #777; font-size: 0.85em;">Issued {{ active_tenant_token.issued_at[:10] }}</span>
+                </div>
+                <p style="color: #555; font-size: 0.9em; margin: 0 0 8px 0;">Anyone with this link can submit payment confirmations for this lease.</p>
+
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; font-size: 0.9em;">Token: </span>
+                    <code id="tenant-token-masked" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">****{{ active_tenant_token.token[-8:] }}</code>
+                    <code id="tenant-token-full" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px; display: none;">{{ active_tenant_token.token }}</code>
+                    <button type="button" onclick="var m=document.getElementById('tenant-token-masked'),f=document.getElementById('tenant-token-full');if(f.style.display==='none'){f.style.display='inline';m.style.display='none';this.textContent='Hide'}else{f.style.display='none';m.style.display='inline';this.textContent='Reveal'}" style="background:none;border:1px solid #ccc;padding:2px 8px;border-radius:3px;font-size:0.85em;cursor:pointer;margin-left:4px;">Reveal</button>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <span style="font-weight: 600; font-size: 0.9em;">Tenant URL: </span>
+                    <input type="text" id="tenant-url" readonly value="{{ request.host_url }}tenant/{{ active_tenant_token.token }}" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; margin-top: 4px; background: #f9fafb;">
+                    <button type="button" onclick="var u=document.getElementById('tenant-url');u.select();document.execCommand('copy');this.textContent='Copied!';setTimeout(function(){document.querySelector('#copy-link-btn').textContent='Copy link'},2000)" id="copy-link-btn" style="margin-top: 4px; background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Copy link</button>
+                </div>
+
+                <details style="margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                    <summary style="cursor: pointer; color: #dc2626; font-weight: 600; font-size: 0.9em;">Revoke Tenant Access</summary>
+                    <form method="POST" action="{{ url_for('revoke_token_route', lease_group_id=lease_data.lease_group_id) }}" style="margin-top: 8px;">
+                        <input type="hidden" name="token" value="{{ active_tenant_token.token }}">
+                        <label style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">Reason (optional):</label>
+                        <input type="text" name="revoke_reason" placeholder="e.g. Tenant changed" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; margin-bottom: 8px;">
+                        <button type="submit" style="background: #dc2626; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Revoke Access</button>
+                    </form>
+                </details>
+            </div>
+
+            {% else %}
+            {# NO ACTIVE TOKEN STATE #}
+            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                <p style="color: #555; font-size: 0.9em; margin: 0 0 12px 0;">No tenant access link has been generated yet.</p>
+                <form method="POST" action="{{ url_for('generate_token_route', lease_group_id=lease_data.lease_group_id) }}">
+                    <button type="submit" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Generate Tenant Link</button>
+                </form>
+            </div>
+            {% endif %}
+
+            {# REVOKED TOKENS (shown muted) #}
+            {% set revoked_tokens = tenant_tokens|selectattr('is_active', 'equalto', false)|list %}
+            {% if revoked_tokens %}
+            <details style="margin-top: 8px;">
+                <summary style="cursor: pointer; color: #777; font-size: 0.85em;">Previous access links ({{ revoked_tokens|length }})</summary>
+                {% for rt in revoked_tokens %}
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; margin-top: 8px; opacity: 0.7;">
+                    <span style="background: #9ca3af; color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px;">Revoked</span>
+                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Issued {{ rt.issued_at[:10] }}</span>
+                    {% if rt.revoked_at %}
+                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Revoked {{ rt.revoked_at[:10] }}</span>
+                    {% endif %}
+                    {% if rt.revoked_reason %}
+                    <span style="color: #777; font-size: 0.8em; display: block; margin-top: 4px;">Reason: {{ rt.revoked_reason }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </details>
+            {% endif %}
+        </div>
+
+        {# ---- MONTHLY SUBMISSION SUMMARY (Step 9) ---- #}
+        {% if monthly_summary %}
+        <div id="monthly-summary" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <h3 style="font-size: 1.1em; margin-bottom: 4px;">Monthly Submission Summary</h3>
+            <p style="color: #777; font-size: 0.85em; margin: 0 0 12px 0;">
+                This summary reflects whether the tenant submitted any declarations for a given month.
+                It does not verify payment or completeness.
+            </p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e5e7eb;">
+                        <th style="text-align: left; padding: 6px 8px; color: #555;">Month</th>
+                        <th style="text-align: left; padding: 6px 8px; color: #555;">Status</th>
+                        <th style="text-align: left; padding: 6px 8px; color: #555;">Submissions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ms in monthly_summary %}
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 6px 8px;">{{ ms.month_name }} {{ ms.year }}</td>
+                        <td style="padding: 6px 8px;">
+                            {% if ms.count > 0 %}
+                            <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 2px 8px; border-radius: 10px;">Submitted</span>
+                            {% else %}
+                            <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 2px 8px; border-radius: 10px;">Not submitted</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 6px 8px; color: #777;">
+                            {% if ms.count > 0 %}
+                            <a href="#payment-submissions" style="color: #2563eb; text-decoration: none;">{{ ms.count }} submission{{ 's' if ms.count != 1 }}</a>
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {# ---- PAYMENT SUBMISSIONS SECTION (Step 8) ---- #}
+        <div id="payment-submissions" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <h3 style="font-size: 1.1em; margin-bottom: 4px;">Payment Submissions (Unverified)</h3>
+            <p style="color: #777; font-size: 0.85em; margin: 0 0 16px 0;">
+                These are tenant-declared submissions. The app does not verify payments.
+                Landlords must independently confirm receipts via bank records.
+            </p>
+
+            {% if payment_confirmations %}
+                {% set ns = namespace(prev_month=None, prev_year=None) %}
+                {% for pc in payment_confirmations %}
+
+                {# Month grouping divider #}
+                {% if pc.period_month != ns.prev_month or pc.period_year != ns.prev_year %}
+                <div style="display: flex; align-items: center; gap: 10px; margin: 16px 0 8px 0;{% if loop.first %} margin-top: 0;{% endif %}">
+                    <div style="flex: 1; height: 1px; background: #d1d5db;"></div>
+                    <span style="color: #6b7280; font-size: 0.8em; font-variant: small-caps; letter-spacing: 0.05em; white-space: nowrap;">
+                        {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][pc.period_month - 1] if pc.period_month else '?' }}
+                        {{ pc.period_year or '' }}
+                    </span>
+                    <div style="flex: 1; height: 1px; background: #d1d5db;"></div>
+                </div>
+                {% set ns.prev_month = pc.period_month %}
+                {% set ns.prev_year = pc.period_year %}
+                {% endif %}
+
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                        <span style="background: #6b7280; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Unverified</span>
+                        <span style="font-weight: 600; font-size: 0.9em;">
+                            {{ pc.confirmation_type|capitalize if pc.confirmation_type else 'Unknown' }}
+                        </span>
+                        <span style="color: #777; font-size: 0.85em;">
+                            {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][pc.period_month - 1] if pc.period_month else '?' }}
+                            {{ pc.period_year or '' }}
+                        </span>
+                        {% set same_period = payment_confirmations|selectattr('confirmation_type', 'equalto', pc.confirmation_type)|selectattr('period_month', 'equalto', pc.period_month)|selectattr('period_year', 'equalto', pc.period_year)|list %}
+                        {% if same_period|length > 1 %}
+                        <span style="background: #fef3c7; color: #92400e; font-size: 0.7em; padding: 2px 8px; border-radius: 10px;">Multiple submissions this period</span>
+                        {% endif %}
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 0.9em;">
+                        <div><span style="color: #777;">Amount paid:</span> <strong>₹{{ "{:,.0f}".format(pc.amount_declared|float) if pc.amount_declared else '—' }}</strong></div>
+                        {% if pc.confirmation_type == 'rent' and pc.amount_agreed %}
+                        <div><span style="color: #777;">Agreed rent:</span> ₹{{ "{:,.0f}".format(pc.amount_agreed|float) }}</div>
+                        {% endif %}
+                        {% if pc.tds_deducted is not none %}
+                        <div><span style="color: #777;">TDS deducted:</span> ₹{{ "{:,.0f}".format(pc.tds_deducted|float) }}</div>
+                        {% endif %}
+                        {% if pc.date_paid %}
+                        <div><span style="color: #777;">Date paid:</span> {{ pc.date_paid }}</div>
+                        {% endif %}
+                        <div><span style="color: #777;">Submitted:</span> {{ pc.submitted_at[:16]|replace('T', ' ') if pc.submitted_at else '—' }}</div>
+                        <div><span style="color: #777;">Via:</span> {{ pc.submitted_via|replace('_', ' ')|capitalize if pc.submitted_via else '—' }}</div>
+                    </div>
+
+                    {% if pc.notes %}
+                    <div style="margin-top: 8px; font-size: 0.85em; color: #555;">
+                        <span style="color: #777;">Notes:</span> {{ pc.notes }}
+                    </div>
+                    {% endif %}
+
+                    {% if pc.proof_files and pc.proof_files|length > 0 %}
+                    <div style="margin-top: 8px; font-size: 0.85em;">
+                        <span style="color: #777;">Proof:</span>
+                        {% for pf in pc.proof_files %}
+                            {% set filename = pf.split('/')[-1] %}
+                            <a href="{{ url_for('view_proof', lease_group_id=pc.lease_group_id, filename=filename) }}" target="_blank" style="color: #2563eb; margin-left: 4px;">{{ filename }}</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #999; font-size: 0.9em; font-style: italic;">No payment submissions have been recorded yet.</p>
+            {% endif %}
+        </div>
+
     </div>
 
     {% if lease_versions and lease_versions|length > 1 %}

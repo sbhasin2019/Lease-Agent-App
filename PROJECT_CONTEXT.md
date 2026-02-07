@@ -666,6 +666,307 @@ No user-visible behaviour has changed.
   This step establishes proof file infrastructure only.
   No user-visible behaviour has changed.
 
+  ----------------------------------------------------------------                                                
+                                                          
+    Step 4: Tenant Access Token Infrastructure                                                                    
+    Status: IMPLEMENTED                                                                                           
+    Date: 7 February 2026
+
+    What was added:
+    - import secrets (for cryptographically secure token generation)
+    - generate_tenant_token(lease_group_id)
+      - Verifies lease_group_id exists in lease_data.json
+      - Refuses if an active token already exists (does NOT auto-revoke)
+      - Creates token using secrets.token_urlsafe(32)
+      - Saves to tenant_access.json
+    - validate_token(token)
+      - Pure read-only function, no side effects
+      - Token is valid if and only if is_active == true
+      - Does NOT check lease expiry or load lease data
+      - Returns structured result with lease_group_id on success
+      - Returns failure reason (not_found / revoked / inactive) on failure
+    - revoke_tenant_token(token, reason=None)
+      - Sets is_active = false, writes revoked_at timestamp
+      - revoked_reason is optional (may be null)
+      - NEVER deletes or alters payment history
+    - get_active_token_for_lease_group(lease_group_id)
+      - Read-only helper for future UI
+      - Returns active token record or None
+
+    Schema comment updated:
+    - Token validity rule changed from
+      "is_active AND lease has unexpired current version" to
+      "is_active == true (lease expiry does NOT affect validity in Phase 1)"
+
+    Locked decisions:
+    - last_used_at remains in schema but is NOT updated in Phase 1
+    - validate_token() is strictly read-only (no disk writes)
+    - Lease expiry does not affect token validity
+    - Access control is explicitly landlord-controlled
+
+    What was NOT changed:
+    - No templates modified
+    - No routes added
+    - No lease_data.json modified
+    - No payment_data.json modified
+    - No schema changes (only comment clarification)
+    - No UI added
+
+    None of these functions are called anywhere yet.
+    This step establishes token infrastructure only.
+    No user-visible behaviour has changed.
+
+  ----------------------------------------------------------------
+
+-------
+
+    Step 5: Tenant Submission Route (Backend + Template)
+    Status: IMPLEMENTED
+    Date: 7 February 2026
+
+    What was added:
+    - Jinja global: now() registered for template year dropdowns
+    - GET /tenant/<token> route
+      - Validates token via validate_token()
+      - Loads current lease for context (read-only)
+      - Shows error page for invalid/revoked/inactive tokens
+      - Passes lease nickname and agreed rent to template
+      - Still allows access when no current lease exists
+    - POST /tenant/<token>/confirm route
+      - Re-validates token on every submission
+      - Server-side validation:
+        - confirmation_type must be rent/maintenance/utilities
+        - period_month 1-12
+        - period_year 2020 to current year + 1
+        - amount_declared > 0
+        - tds_deducted >= 0 and <= amount_declared (if provided)
+        - Disclaimer checkbox required
+      - amount_agreed: server-set for rent (copied from lease), null otherwise
+      - Single proof file per submission (proof_files list of 0 or 1)
+      - Proof upload failure rejects entire submission
+      - Appends record to payment_data.json (append-only)
+      - verification_status always "unverified"
+      - submitted_via always "tenant_link"
+    - New template: templates/tenant_confirm.html
+      - Completely separate from index.html
+      - Three states: invalid token, form, success
+      - Form preserves values on validation error
+      - Prominent disclaimer with required acknowledgement
+      - Success message reinforces "declaration only" language
+
+    What was NOT changed:
+    - No modifications to index.html
+    - No modifications to existing routes
+    - No lease_data.json writes
+    - No schema changes
+    - No authentication added
+    - No dashboard changes
+
+----------------------------------------------------------------
+                                                                                                                  
+    Step 6: Backend Route to Accept Payment Confirmations  
+    Status: MERGED INTO STEP 5
+    Date: 7 February 2026
+
+    The POST /tenant/<token>/confirm route was implemented as part
+    of Step 5. This step has no separate deliverable.
+
+    The original plan (Step 6) envisioned this as a separate step,
+    but in practice the submission route was built alongside the
+    tenant confirmation page and template in Step 5.
+
+    No additional code was written for Step 6.
+
+    ----------------------------------------------------------------
+
+    Step 7: Tenant Access Token Management (Landlord UI)
+    Status: IMPLEMENTED
+    Date: 7 February 2026
+
+    What was added:
+
+    Backend (app.py):
+    - get_all_tokens_for_lease_group(lease_group_id) helper
+      - Returns ALL tokens (active + revoked) for a lease group
+      - Sorted by issued_at DESC (newest first)
+      - Read-only
+    - POST /lease/<lease_group_id>/generate-token route
+      - Calls existing generate_tenant_token()
+      - Fails if active token already exists (no auto-revoke)
+      - Redirects back to lease view with flash message
+    - POST /lease/<lease_group_id>/revoke-token route
+      - Calls existing revoke_tenant_token()
+      - Accepts optional revoke_reason from form
+      - Redirects back to lease view with flash message
+    - Index route now passes tenant_tokens and active_tenant_token
+      to template when viewing a lease (view mode only)
+
+    Template (index.html):
+    - "Tenant Access" section added to lease view mode
+      - Placed after the view action buttons, before version history
+      - Three states handled:
+        1. No token exists:
+           - Message: "No tenant access link has been generated yet."
+           - "Generate Tenant Link" button
+        2. Active token:
+           - Green "Active" badge with issued date
+           - Masked token display (****abcd) with Reveal/Hide toggle
+           - Full tenant URL in copyable input field
+           - "Copy link" button
+           - Warning: "Anyone with this link can submit payment
+             confirmations for this lease."
+           - Collapsible "Revoke Tenant Access" section with optional
+             reason field
+        3. Revoked token(s):
+           - Shown in a collapsible "Previous access links" section
+           - Visually muted (opacity)
+           - Displays: issued date, revoked date, revoked reason
+
+    Decisions locked:
+    - Tokens are landlord-controlled (no auto-revocation)
+    - At most ONE active token per lease_group_id
+    - Revoked tokens are never deleted (audit trail)
+    - Token records shown muted, not hidden
+
+    What was NOT changed:
+    - No schema changes
+    - No payment_data.json access
+    - No tenant-facing routes or template modified
+    - No lease data modified
+    - No authentication added
+
+    ----------------------------------------------------------------
+
+    Step 8: Landlord Payment Audit View (Read-Only)
+    Status: IMPLEMENTED
+    Date: 7 February 2026
+
+    What was added:
+
+    Backend (app.py):
+    - get_payments_for_lease_group(lease_group_id) helper
+      - Loads payment_data.json via _load_all_payments()
+      - Filters confirmations by lease_group_id
+      - Sorted by submitted_at DESC (newest first)
+      - Strictly read-only — never modifies data
+    - Index route now passes payment_confirmations to template
+      when viewing a lease (view mode only)
+
+    Template (index.html):
+    - "Payment Submissions (Unverified)" section added to lease view
+      - Placed after the Tenant Access section
+      - Prominent disclaimer: "These are tenant-declared submissions.
+        The app does not verify payments. Landlords must independently
+        confirm receipts via bank records."
+
+    Per-record display:
+    - Confirmation type (Rent / Maintenance / Utilities)
+    - Period (Month + Year)
+    - Amount paid (from amount_declared field)
+    - Agreed rent (only for type == rent, if amount_agreed exists)
+    - TDS deducted (only if provided; null vs 0 distinguished)
+    - Date paid (if provided)
+    - Submitted at (timestamp)
+    - Submitted via (tenant_link / landlord_manual)
+    - Notes (if provided)
+    - Proof file links (using existing /view_proof route)
+    - Grey "Unverified" badge on every record
+
+    Empty state:
+    - "No payment submissions have been recorded yet."
+
+    Audit readability enhancements (presentational only):
+    - Month grouping dividers: muted small-caps divider inserted
+      when (period_month, period_year) changes between records
+      (e.g. "— February 2026 —")
+    - Duplicate submission indicator: amber badge reading
+      "Multiple submissions this period" shown on each record
+      where more than one submission exists for the same
+      (confirmation_type, period_month, period_year)
+
+    Rules enforced:
+    - No verification or approval controls
+    - No status computation (paid / unpaid / overdue)
+    - No aggregation or totals
+    - No deduplication — all records shown individually
+    - No editing or deleting submissions
+    - Multiple submissions per month all displayed
+
+    What was NOT changed:
+    - No schema changes
+    - No writes to payment_data.json
+    - No tenant routes or template modified
+    - No new validation or business logic
+    - No existing routes modified
+
+    ----------------------------------------------------------------
+
+    UI Copy Change (Non-Step, Presentational Only)
+    Status: APPLIED
+    Date: 7 February 2026
+
+    File: templates/tenant_confirm.html
+
+    - Field label changed from "Amount Declared (₹)" to "Amount Paid (₹)"
+    - Helper text added: "The amount you actually paid (before any
+      TDS deduction)"
+    - The form field name remains name="amount_declared" (unchanged)
+    - No backend, schema, or validation changes
+
+    ----------------------------------------------------------------                                              
+                                                                                                                  
+    Step 9: Landlord Dashboard Summary (Read-Only)                                                                
+    Status: IMPLEMENTED                                                                                           
+    Date: 7 February 2026
+
+    What was added:
+
+    Backend (app.py):
+    - Monthly submission summary computed inline in the index route
+      - No new helper functions added
+      - Uses existing get_payments_for_lease_group() data
+      - Groups by (period_year, period_month), all confirmation types
+        counted together
+      - Month range:
+        - Start: lease start date month (priority 1)
+          OR earliest submission period (fallback)
+        - End: current month
+      - Each entry: { year, month, month_name, count }
+      - Passed to template as monthly_summary (list)
+      - Read-only — no data writes
+
+    Template (index.html):
+    - "Monthly Submission Summary" table added to lease view
+      - Placed above the Payment Submissions (Unverified) section
+      - Informational disclaimer: "This summary reflects whether
+        the tenant submitted any declarations for a given month.
+        It does not verify payment or completeness."
+      - Compact table with columns: Month, Status, Submissions
+      - Status badges:
+        - "Submitted" (muted green) — at least 1 record exists
+        - "Not submitted" (neutral grey) — no records
+      - Submission count links to #payment-submissions anchor
+      - id="payment-submissions" added to Payment Submissions section
+      - Hidden entirely if no monthly_summary data exists
+        (no lease start date AND no submissions)
+
+    Rules enforced:
+    - No verification or correctness logic
+    - No amount comparison or totals
+    - No "paid" / "unpaid" / "late" language
+    - No deduplication — all submissions counted
+    - All confirmation types (rent, maintenance, utilities)
+      counted together per month
+    - tenant_link and landlord_manual treated equally
+
+    What was NOT changed:
+    - No schema changes
+    - No data writes
+    - No new helper functions
+    - No tenant routes or template modified
+    - No existing routes modified
+    - No verification logic added
+
 ----------------------------------------------------------------
 UPDATED - 6 FEBRUARY 2026
 -----------------------------------------------------------------

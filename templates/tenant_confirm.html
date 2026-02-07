@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Payment Confirmation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fb;
+            margin: 0;
+            padding: 40px 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 1.4em; margin-top: 0; }
+        label { display: block; font-weight: 600; margin-top: 16px; margin-bottom: 4px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        textarea { resize: vertical; min-height: 60px; }
+        .error-list { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 12px 16px; color: #991b1b; }
+        .error-list li { margin-bottom: 4px; }
+        .success-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; color: #166534; }
+        .disclaimer {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #92400e;
+        }
+        .disclaimer label { display: inline; font-weight: normal; margin: 0; }
+        .btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .btn:hover { background: #1d4ed8; }
+        .lease-context { color: #555; font-size: 0.95em; }
+        .invalid-token { text-align: center; padding: 40px 20px; color: #991b1b; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    {% if not token_valid %}
+    {# ---- INVALID TOKEN ---- #}
+    <div class="card invalid-token">
+        <h1>Access Denied</h1>
+        {% if error_reason == "revoked" %}
+            <p>This link has been revoked by the landlord.</p>
+        {% elif error_reason == "inactive" %}
+            <p>This link is no longer active.</p>
+        {% else %}
+            <p>This link is not valid. Please contact your landlord for a new link.</p>
+        {% endif %}
+    </div>
+
+    {% elif success %}
+    {# ---- SUCCESS ---- #}
+    <div class="card">
+        <div class="success-box">
+            <h1>Confirmation Submitted</h1>
+            <p>Your payment confirmation has been recorded.</p>
+            <p><strong>Important:</strong> This is a declaration only. It does not confirm
+            that your landlord has received or verified the payment. Please ensure your
+            payment was actually made via your bank.</p>
+        </div>
+        <br>
+        <a href="{{ url_for('tenant_page', token=token) }}">Submit another confirmation</a>
+    </div>
+
+    {% else %}
+    {# ---- SUBMISSION FORM ---- #}
+    <div class="card">
+        <h1>Submit Payment Confirmation</h1>
+
+        {% if lease_nickname %}
+            <p class="lease-context">Lease: <strong>{{ lease_nickname }}</strong></p>
+        {% endif %}
+        {% if agreed_rent %}
+            <p class="lease-context">Agreed monthly rent: <strong>{{ "\u20b9{:,.0f}".format(agreed_rent|float) }}</strong></p>
+        {% endif %}
+
+        {% if errors %}
+        <div class="error-list">
+            <ul>
+            {% for e in errors %}
+                <li>{{ e }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('tenant_confirm', token=token) }}" enctype="multipart/form-data">
+
+            <label for="confirmation_type">Payment Type</label>
+            <select id="confirmation_type" name="confirmation_type" required>
+                <option value="">-- Select --</option>
+                <option value="rent" {% if form and form.get('confirmation_type') == 'rent' %}selected{% endif %}>Rent</option>
+                <option value="maintenance" {% if form and form.get('confirmation_type') == 'maintenance' %}selected{% endif %}>Maintenance</option>
+                <option value="utilities" {% if form and form.get('confirmation_type') == 'utilities' %}selected{% endif %}>Utilities</option>
+            </select>
+
+            <label for="period_month">Month</label>
+            <select id="period_month" name="period_month" required>
+                <option value="">-- Select --</option>
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if form and form.get('period_month') == m|string %}selected{% endif %}>
+                    {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][m-1] }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <label for="period_year">Year</label>
+            <select id="period_year" name="period_year" required>
+                <option value="">-- Select --</option>
+                {% set current_year = now().year %}
+                {% for y in range(2020, current_year + 2) %}
+                <option value="{{ y }}" {% if form and form.get('period_year') == y|string %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="amount_declared">Amount Paid (&#8377;)</label>
+            <span style="display:block; font-size:0.85em; color:#777; margin-bottom:4px;">The amount you actually paid (before any TDS deduction)</span>
+            <input type="number" id="amount_declared" name="amount_declared" step="0.01" min="0.01" required
+                   value="{{ form.get('amount_declared', '') if form else '' }}">
+
+            <label for="tds_deducted">TDS Deducted (&#8377;) <span style="font-weight:normal; color:#777;">— optional</span></label>
+            <input type="number" id="tds_deducted" name="tds_deducted" step="0.01" min="0"
+                   value="{{ form.get('tds_deducted', '') if form else '' }}">
+
+            <label for="date_paid">Date Paid <span style="font-weight:normal; color:#777;">— optional</span></label>
+            <input type="date" id="date_paid" name="date_paid"
+                   value="{{ form.get('date_paid', '') if form else '' }}">
+
+            <label for="proof_file">Proof Screenshot <span style="font-weight:normal; color:#777;">— optional (PNG, JPG, PDF)</span></label>
+            <input type="file" id="proof_file" name="proof_file" accept=".png,.jpg,.jpeg,.pdf">
+
+            <label for="notes">Notes <span style="font-weight:normal; color:#777;">— optional</span></label>
+            <textarea id="notes" name="notes">{{ form.get('notes', '') if form else '' }}</textarea>
+
+            <div class="disclaimer">
+                <p><strong>Disclaimer:</strong> This form records a declaration that you have made a payment.
+                Submitting this form does <strong>not</strong> verify or confirm that the payment was received.
+                Your landlord must independently verify all payments via their own bank records.
+                This record is for informational and audit purposes only.</p>
+                <input type="checkbox" id="disclaimer_acknowledged" name="disclaimer_acknowledged" value="1" required>
+                <label for="disclaimer_acknowledged">I understand and acknowledge the above</label>
+            </div>
+
+            <button type="submit" class="btn">Submit Confirmation</button>
+        </form>
+    </div>
+    {% endif %}
+
+</div>
+</body>
+</html>
