@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit Payment Confirmation</title>
+    <title>Tenant Interface</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -57,6 +57,57 @@
         .btn:hover { background: #1d4ed8; }
         .lease-context { color: #555; font-size: 0.95em; }
         .invalid-token { text-align: center; padding: 40px 20px; color: #991b1b; }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-box {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .modal-header {
+            background: #f0f9ff;
+            border-bottom: 1px solid #bae6fd;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: #0369a1; }
+        .modal-close {
+            background: #e0f2fe;
+            border: 1px solid #7dd3fc;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #0369a1;
+            cursor: pointer;
+        }
+        .modal-close:hover { background: #bae6fd; }
+        .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+        #tenantSubmissionsModalBody.history-view form,
+        #tenantSubmissionsModalBody.history-view details { display: none !important; }
+        @media print {
+            body * { visibility: hidden; }
+            #tenantSubmissionsModal, #tenantSubmissionsModal * { visibility: visible; }
+            #tenantSubmissionsModal { position: absolute; left: 0; top: 0; background: none; }
+            #tenantSubmissionsModal .modal-box { box-shadow: none; max-height: none; width: 100%; }
+            #tenantSubmissionsModal .modal-header div { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -90,8 +141,65 @@
     </div>
 
     {% else %}
-    {# ---- SUBMISSION FORM ---- #}
+
+    {# ---- MONTHLY SUBMISSION SUMMARY ---- #}
+    {% if monthly_summary %}
     <div class="card">
+        <h3 style="font-size: 1.1em; margin-top: 0; margin-bottom: 8px;">Your Monthly Submissions
+            {% set ns_attn = namespace(count=0) %}
+            {% for ms in monthly_summary %}
+                {% if ms.review_status in ['reply_from_landlord', 'flagged'] %}{% set ns_attn.count = ns_attn.count + 1 %}{% endif %}
+            {% endfor %}
+            {% if ns_attn.count > 0 %}
+            <span style="background: #fef3c7; color: #92400e; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count == 1 else '' }} attention</span>
+            {% endif %}
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+            <thead>
+                <tr style="border-bottom: 2px solid #e5e7eb;">
+                    <th style="text-align: left; padding: 8px; color: #555;">Month</th>
+                    <th style="text-align: center; padding: 8px; color: #555; width: 80px;">Submissions</th>
+                    <th style="text-align: left; padding: 8px; color: #555;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ms in monthly_summary %}
+                <tr style="border-bottom: 1px solid #f3f4f6;{% if ms.count > 0 %} cursor: pointer;{% endif %}"{% if ms.count > 0 %} onclick="openTenantSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
+                    <td style="padding: 8px;">{{ ms.month_name }} {{ ms.year }}</td>
+                    <td style="padding: 8px; text-align: center; color: #9ca3af;">
+                        {% if ms.count > 0 %}{{ ms.count }}{% else %}—{% endif %}
+                    </td>
+                    <td style="padding: 8px;">
+                        {% if ms.review_status == 'reply_from_landlord' %}
+                        <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Reply from landlord</span>
+                        {% elif ms.review_status == 'flagged' %}
+                        <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Action required</span>
+                        {% elif ms.review_status == 'submitted' %}
+                        <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Submitted</span>
+                        {% elif ms.review_status == 'resolved' %}
+                        <span style="background: #f0fdf4; color: #86efac; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Resolved</span>
+                        {% else %}
+                        <span style="color: #d1d5db;">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if payment_confirmations %}
+        <div style="margin-top: 10px; text-align: center;">
+            <a href="javascript:void(0)" onclick="openTenantFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="margin-bottom: 20px;">
+        <a href="javascript:void(0)" onclick="document.getElementById('new-submission-form').style.display='block';this.style.display='none';document.getElementById('new-submission-form').scrollIntoView({behavior:'smooth'});" style="color: #2563eb; font-size: 0.9em; text-decoration: none;">+ Add new submission</a>
+    </div>
+
+    {# ---- SUBMISSION FORM ---- #}
+    <div class="card" id="new-submission-form" style="display: none;">
         <h1>Submit Payment Confirmation</h1>
 
         {% if lease_nickname %}
@@ -229,10 +337,9 @@
     </div>
 
     {% if payment_confirmations %}
-    <div class="card" style="margin-top: 20px;">
-        <h2 style="font-size: 1.2em; margin-top: 0;">Your past submissions</h2>
+    <div id="tenant-submissions-storage" style="display: none;">
         {% for pc in payment_confirmations %}
-        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px;">
+        <div data-period-month="{{ pc.period_month }}" data-period-year="{{ pc.period_year }}" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
                 <span style="font-weight: 600; font-size: 0.9em;">{{ pc.confirmation_type|capitalize if pc.confirmation_type else 'Unknown' }}</span>
                 <span style="color: #777; font-size: 0.85em;">
@@ -312,5 +419,185 @@
     {% endif %}
 
 </div>
+
+<!-- PER-MONTH SUBMISSIONS MODAL -->
+<div class="modal-overlay" id="tenantSubmissionsModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="tenantSubmissionsModalTitle">Submissions</h3>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" id="tenantBackBtn" style="display: none;" class="modal-close" onclick="tenantBackToMonthView()">Back</button>
+                <button type="button" id="tenantPrintBtn" style="display: none;" class="modal-close" onclick="window.print()">Print</button>
+                <button type="button" id="tenantHistoryBtn" class="modal-close" onclick="tenantViewFullHistory()">View full history</button>
+                <button type="button" class="modal-close" onclick="closeTenantSubmissionsModal()">Close</button>
+            </div>
+        </div>
+        <div class="modal-body" id="tenantSubmissionsModalBody">
+        </div>
+    </div>
+</div>
+
+<script>
+var tenantState = { month: null, year: null, monthName: null, viewMode: 'month', origin: 'month' };
+
+function openTenantSubmissionsModal(month, year, monthName) {
+    tenantState.month = month;
+    tenantState.year = year;
+    tenantState.monthName = monthName;
+    tenantState.viewMode = 'month';
+    tenantState.origin = 'month';
+
+    var modal = document.getElementById('tenantSubmissionsModal');
+    var body = document.getElementById('tenantSubmissionsModalBody');
+    var title = document.getElementById('tenantSubmissionsModalTitle');
+    var storage = document.getElementById('tenant-submissions-storage');
+    if (!modal || !body) return;
+
+    // Defensive: move any leftover cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Ensure review mode
+    body.classList.remove('history-view');
+
+    // Move only matching month cards
+    var allCards = document.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) {
+        if (String(card.dataset.periodMonth) === String(month) &&
+            String(card.dataset.periodYear) === String(year)) {
+            body.appendChild(card);
+        }
+    });
+
+    // Set title and button visibility for month view
+    title.textContent = 'Submissions for ' + monthName + ' ' + year;
+    document.getElementById('tenantHistoryBtn').style.display = '';
+    document.getElementById('tenantBackBtn').style.display = 'none';
+    document.getElementById('tenantPrintBtn').style.display = 'none';
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function openTenantFullHistoryModal() {
+    tenantState.month = null;
+    tenantState.year = null;
+    tenantState.monthName = null;
+    tenantState.viewMode = 'history';
+    tenantState.origin = 'page';
+
+    var modal = document.getElementById('tenantSubmissionsModal');
+    var body = document.getElementById('tenantSubmissionsModalBody');
+    var title = document.getElementById('tenantSubmissionsModalTitle');
+    var storage = document.getElementById('tenant-submissions-storage');
+    if (!modal || !body) return;
+
+    // Defensive: move any leftover cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Enable history (read-only) mode
+    body.classList.add('history-view');
+
+    // Move ALL submission cards into modal
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) { body.appendChild(card); });
+
+    // No Back (opened from page), show Print
+    title.textContent = 'All Payment Submissions';
+    document.getElementById('tenantHistoryBtn').style.display = 'none';
+    document.getElementById('tenantBackBtn').style.display = 'none';
+    document.getElementById('tenantPrintBtn').style.display = '';
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function tenantViewFullHistory() {
+    tenantState.viewMode = 'history';
+    var body = document.getElementById('tenantSubmissionsModalBody');
+    var title = document.getElementById('tenantSubmissionsModalTitle');
+    var storage = document.getElementById('tenant-submissions-storage');
+    if (!body || !storage) return;
+
+    // Move current cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Enable history (read-only) mode
+    body.classList.add('history-view');
+
+    // Move ALL submission cards into modal
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) { body.appendChild(card); });
+
+    // Show Back with month context, show Print
+    title.textContent = 'All Payment Submissions';
+    document.getElementById('tenantHistoryBtn').style.display = 'none';
+    var backBtn = document.getElementById('tenantBackBtn');
+    backBtn.textContent = 'Back to ' + tenantState.monthName + ' ' + tenantState.year;
+    backBtn.style.display = '';
+    document.getElementById('tenantPrintBtn').style.display = '';
+}
+
+function tenantBackToMonthView() {
+    tenantState.viewMode = 'month';
+    var body = document.getElementById('tenantSubmissionsModalBody');
+    var title = document.getElementById('tenantSubmissionsModalTitle');
+    var storage = document.getElementById('tenant-submissions-storage');
+    if (!body || !storage) return;
+
+    // Move all cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Disable history mode
+    body.classList.remove('history-view');
+
+    // Move only the original month's cards back in
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) {
+        if (String(card.dataset.periodMonth) === String(tenantState.month) &&
+            String(card.dataset.periodYear) === String(tenantState.year)) {
+            body.appendChild(card);
+        }
+    });
+
+    // Restore month view
+    title.textContent = 'Submissions for ' + tenantState.monthName + ' ' + tenantState.year;
+    document.getElementById('tenantHistoryBtn').style.display = '';
+    document.getElementById('tenantBackBtn').style.display = 'none';
+    document.getElementById('tenantPrintBtn').style.display = 'none';
+}
+
+function closeTenantSubmissionsModal() {
+    var modal = document.getElementById('tenantSubmissionsModal');
+    var body = document.getElementById('tenantSubmissionsModalBody');
+    var storage = document.getElementById('tenant-submissions-storage');
+    if (!modal || !body || !storage) return;
+
+    // Always move all cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Reset state
+    body.classList.remove('history-view');
+    tenantState.viewMode = 'month';
+    tenantState.origin = 'month';
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+// Close on click outside
+document.getElementById('tenantSubmissionsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeTenantSubmissionsModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modal = document.getElementById('tenantSubmissionsModal');
+        if (modal && modal.classList.contains('visible')) {
+            closeTenantSubmissionsModal();
+        }
+    }
+});
+</script>
+
 </body>
 </html>

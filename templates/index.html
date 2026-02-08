@@ -1632,6 +1632,17 @@
         .text-modal-close:hover {
             background: #bae6fd;
         }
+        @media print {
+            body * { visibility: hidden; }
+            #changesModal, #changesModal * { visibility: visible; }
+            #changesModal { position: absolute; left: 0; top: 0; background: none; }
+            #changesModal .text-modal { box-shadow: none; max-height: none; width: 100%; }
+            #changesModal .text-modal-header div { display: none; }
+            #submissionsModal, #submissionsModal * { visibility: visible; }
+            #submissionsModal { position: absolute; left: 0; top: 0; background: none; }
+            #submissionsModal .text-modal { box-shadow: none; max-height: none; width: 100%; }
+            #submissionsModal .text-modal-header div { display: none; }
+        }
         .text-modal-body {
             padding: 24px;
             overflow-y: auto;
@@ -2359,14 +2370,12 @@
     <!-- VIEW MODE: Display saved lease details -->
     {% set cv = lease_data.current_values if lease_data.current_values else lease_data %}
 
-    {% if leases and leases|length > 1 %}
     <!-- Dashboard Navigation - Back Link -->
     <div class="dashboard-nav">
         <a href="/" class="dashboard-nav-link">
             <span>←</span> All Leases
         </a>
     </div>
-    {% endif %}
 
     {% if reminder_status and (reminder_status.lease_expiry or reminder_status.rent_payment) %}
     <div class="reminder-card">
@@ -2483,32 +2492,11 @@
             </div>
         </div>
 
-        <!-- SECTION E: Changes from Previous Version (only for renewals) -->
+        <!-- SECTION E: Changes from Previous Lease (only for renewals) -->
         {% if version_changes and version_changes|length > 0 %}
-        <button type="button" class="btn-toggle-changes" onclick="toggleVersionChanges()">
-            View changes from previous version
+        <button type="button" class="btn-toggle-changes" onclick="openChangesModal()">
+            View changes from previous lease
         </button>
-        <div class="details-group version-changes" id="versionChangesSection" style="display: none;">
-            <h4 class="details-group-header">Changes from Previous Version</h4>
-            {% for change in version_changes %}
-            <div class="field-row change-{{ change.change_type }}">
-                <span class="field-label">{{ change.label }}</span>
-                <span class="field-value">
-                    {% if change.change_type == 'added' %}
-                        <span class="change-added">{{ change.new_value | format_money }}</span>
-                        <span class="change-note">(new)</span>
-                    {% elif change.change_type == 'removed' %}
-                        <span class="change-removed">{{ (change.old_value or '—') | format_money }}</span>
-                        <span class="change-note">(removed)</span>
-                    {% else %}
-                        <span class="change-old">{{ (change.old_value or '—') | format_money }}</span>
-                        <span class="change-arrow">→</span>
-                        <span class="change-new">{{ (change.new_value or '—') | format_money }}</span>
-                    {% endif %}
-                </span>
-            </div>
-            {% endfor %}
-        </div>
         {% endif %}
 
         <!-- Metadata -->
@@ -2541,117 +2529,126 @@
             </button>
         </div>
 
-        {# ---- TENANT ACCESS SECTION (Step 7) ---- #}
-        <div class="tenant-access-section" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
-            <h3 style="font-size: 1.1em; margin-bottom: 12px;">Tenant Access</h3>
-
-            {% if active_tenant_token %}
-            {# ACTIVE TOKEN STATE #}
-            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="background: #16a34a; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Active</span>
-                    <span style="color: #777; font-size: 0.85em;">Issued {{ active_tenant_token.issued_at[:10] }}</span>
-                </div>
-                <p style="color: #555; font-size: 0.9em; margin: 0 0 8px 0;">Anyone with this link can submit payment confirmations for this lease.</p>
-
-                <div style="margin-bottom: 8px;">
-                    <span style="font-weight: 600; font-size: 0.9em;">Token: </span>
-                    <code id="tenant-token-masked" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">****{{ active_tenant_token.token[-8:] }}</code>
-                    <code id="tenant-token-full" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px; display: none;">{{ active_tenant_token.token }}</code>
-                    <button type="button" onclick="var m=document.getElementById('tenant-token-masked'),f=document.getElementById('tenant-token-full');if(f.style.display==='none'){f.style.display='inline';m.style.display='none';this.textContent='Hide'}else{f.style.display='none';m.style.display='inline';this.textContent='Reveal'}" style="background:none;border:1px solid #ccc;padding:2px 8px;border-radius:3px;font-size:0.85em;cursor:pointer;margin-left:4px;">Reveal</button>
-                </div>
-
-                <div style="margin-bottom: 12px;">
-                    <span style="font-weight: 600; font-size: 0.9em;">Tenant URL: </span>
-                    <input type="text" id="tenant-url" readonly value="{{ request.host_url }}tenant/{{ active_tenant_token.token }}" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; margin-top: 4px; background: #f9fafb;">
-                    <button type="button" onclick="var u=document.getElementById('tenant-url');u.select();document.execCommand('copy');this.textContent='Copied!';setTimeout(function(){document.querySelector('#copy-link-btn').textContent='Copy link'},2000)" id="copy-link-btn" style="margin-top: 4px; background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Copy link</button>
-                </div>
-
-                <details style="margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
-                    <summary style="cursor: pointer; color: #dc2626; font-weight: 600; font-size: 0.9em;">Revoke Tenant Access</summary>
-                    <form method="POST" action="{{ url_for('revoke_token_route', lease_group_id=lease_data.lease_group_id) }}" style="margin-top: 8px;">
-                        <input type="hidden" name="token" value="{{ active_tenant_token.token }}">
-                        <label style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">Reason (optional):</label>
-                        <input type="text" name="revoke_reason" placeholder="e.g. Tenant changed" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; margin-bottom: 8px;">
-                        <button type="submit" style="background: #dc2626; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Revoke Access</button>
-                    </form>
-                </details>
+        {# ---- LEASE VERSION HISTORY ---- #}
+        {% if lease_versions and lease_versions|length > 1 %}
+        <div class="version-history" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <div class="version-history-header">
+                <h3>Lease Version History</h3>
+                <span class="version-count">{{ lease_versions|length }} version{% if lease_versions|length != 1 %}s{% endif %}</span>
             </div>
-
-            {% else %}
-            {# NO ACTIVE TOKEN STATE #}
-            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
-                <p style="color: #555; font-size: 0.9em; margin: 0 0 12px 0;">No tenant access link has been generated yet.</p>
-                <form method="POST" action="{{ url_for('generate_token_route', lease_group_id=lease_data.lease_group_id) }}">
-                    <button type="submit" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Generate Tenant Link</button>
-                </form>
+            <div id="lease-history-collapsed">
+                <button type="button" onclick="document.getElementById('lease-history-collapsed').style.display='none';document.getElementById('lease-history-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">View lease history</button>
             </div>
-            {% endif %}
-
-            {# REVOKED TOKENS (shown muted) #}
-            {% set revoked_tokens = tenant_tokens|selectattr('is_active', 'equalto', false)|list %}
-            {% if revoked_tokens %}
-            <details style="margin-top: 8px;">
-                <summary style="cursor: pointer; color: #777; font-size: 0.85em;">Previous access links ({{ revoked_tokens|length }})</summary>
-                {% for rt in revoked_tokens %}
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; margin-top: 8px; opacity: 0.7;">
-                    <span style="background: #9ca3af; color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px;">Revoked</span>
-                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Issued {{ rt.issued_at[:10] }}</span>
-                    {% if rt.revoked_at %}
-                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Revoked {{ rt.revoked_at[:10] }}</span>
-                    {% endif %}
-                    {% if rt.revoked_reason %}
-                    <span style="color: #777; font-size: 0.8em; display: block; margin-top: 4px;">Reason: {{ rt.revoked_reason }}</span>
-                    {% endif %}
+            <div id="lease-history-full" style="display: none;">
+            <div class="version-list">
+                {% for version in lease_versions %}
+                <div class="version-item {% if version.is_current %}current{% else %}previous{% endif %}">
+                    <span class="version-badge">v{{ version.version or 1 }}</span>
+                    <div class="version-details">
+                        <div class="version-detail">
+                            <span class="version-detail-label">Start:</span>
+                            <span class="version-detail-value">{{ (version.current_values.lease_start_date if version.current_values) or '—' }}</span>
+                        </div>
+                        <div class="version-detail">
+                            <span class="version-detail-label">End:</span>
+                            <span class="version-detail-value">{{ (version.current_values.lease_end_date if version.current_values) or '—' }}</span>
+                        </div>
+                        <div class="version-detail">
+                            <span class="version-detail-label">File:</span>
+                            <span class="version-detail-value">{{ (version.source_document.filename if version.source_document) or '—' }}</span>
+                        </div>
+                    </div>
+                    <span class="version-status {% if version.is_current %}current{% else %}previous{% endif %}">
+                        {% if version.is_current %}Current / Latest{% else %}Previous{% endif %}
+                    </span>
+                    <div class="version-actions">
+                        {% if version.id == lease_data.id %}
+                        <span class="btn-view-version viewing">Viewing</span>
+                        {% else %}
+                        <a href="/?lease_id={{ version.id }}" class="btn-view-version">View</a>
+                        {% endif %}
+                        <button type="button" class="btn-delete-version"
+                                onclick="openVersionDeleteModal('{{ version.id }}', '{{ version.version or 1 }}', {{ 'true' if version.is_current else 'false' }}, {{ lease_versions|length }})">
+                            Delete
+                        </button>
+                    </div>
                 </div>
                 {% endfor %}
-            </details>
-            {% endif %}
+            </div>
+            <button type="button" onclick="document.getElementById('lease-history-full').style.display='none';document.getElementById('lease-history-collapsed').style.display='block';" style="margin-top: 8px; background: none; border: 1px solid #e5e7eb; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; color: #6b7280; cursor: pointer;">Hide lease history</button>
+            </div>
         </div>
+        {% endif %}
 
         {# ---- MONTHLY SUBMISSION SUMMARY (Step 9) ---- #}
         {% if monthly_summary %}
         <div id="monthly-summary" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
-            <h3 style="font-size: 1.1em; margin-bottom: 4px;">Monthly Submission Summary</h3>
+            <h3 style="font-size: 1.1em; margin-bottom: 4px;">Monthly Submission Summary
+                {% set ns_attn = namespace(count=0) %}
+                {% for ms in monthly_summary %}
+                    {% if ms.review_status in ['tenant_replied', 'pending'] %}{% set ns_attn.count = ns_attn.count + 1 %}{% endif %}
+                {% endfor %}
+                {% if ns_attn.count > 0 %}
+                <span style="background: #dbeafe; color: #1e40af; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count == 1 else '' }} attention</span>
+                {% endif %}
+            </h3>
+            <div id="monthly-summary-collapsed">
+                <button type="button" onclick="document.getElementById('monthly-summary-collapsed').style.display='none';document.getElementById('monthly-summary-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Show monthly summary</button>
+            </div>
+            <div id="monthly-summary-full" style="display: none;">
             <p style="color: #777; font-size: 0.85em; margin: 0 0 12px 0;">
                 This summary reflects whether the tenant submitted any declarations for a given month.
                 It does not verify payment or completeness.
             </p>
+            <style>
+                #monthly-summary tr[onclick]:hover { background: #f9fafb; }
+                #submissionsModalBody.history-view form,
+                #submissionsModalBody.history-view details { display: none !important; }
+            </style>
             <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
                 <thead>
                     <tr style="border-bottom: 2px solid #e5e7eb;">
-                        <th style="text-align: left; padding: 6px 8px; color: #555;">Month</th>
-                        <th style="text-align: left; padding: 6px 8px; color: #555;">Status</th>
-                        <th style="text-align: left; padding: 6px 8px; color: #555;">Submissions</th>
+                        <th style="text-align: left; padding: 8px; color: #555;">Month</th>
+                        <th style="text-align: center; padding: 8px; color: #555; width: 80px;">Submissions</th>
+                        <th style="text-align: left; padding: 8px; color: #555;">Review</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for ms in monthly_summary %}
-                    <tr style="border-bottom: 1px solid #f3f4f6;">
-                        <td style="padding: 6px 8px;">{{ ms.month_name }} {{ ms.year }}</td>
-                        <td style="padding: 6px 8px;">
-                            {% if ms.count > 0 %}
-                            <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 2px 8px; border-radius: 10px;">Submitted</span>
-                            {% else %}
-                            <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 2px 8px; border-radius: 10px;">Not submitted</span>
-                            {% endif %}
+                    <tr style="border-bottom: 1px solid #f3f4f6;{% if ms.count > 0 %} cursor: pointer;{% endif %}"{% if ms.count > 0 %} onclick="openSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
+                        <td style="padding: 8px;">{{ ms.month_name }} {{ ms.year }}</td>
+                        <td style="padding: 8px; text-align: center; color: #9ca3af;">
+                            {% if ms.count > 0 %}{{ ms.count }}{% else %}—{% endif %}
                         </td>
-                        <td style="padding: 6px 8px; color: #777;">
-                            {% if ms.count > 0 %}
-                            <a href="#payment-submissions" style="color: #2563eb; text-decoration: none;">{{ ms.count }} submission{{ 's' if ms.count != 1 }}</a>
+                        <td style="padding: 8px;">
+                            {% if ms.review_status == 'tenant_replied' %}
+                            <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Tenant replied {{ ms.review_date|format_date if ms.review_date else '' }}</span>
+                            {% elif ms.review_status == 'flagged' %}
+                            <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Flagged {{ ms.review_date|format_date if ms.review_date else '' }}</span>
+                            {% elif ms.review_status == 'pending' %}
+                            <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Pending review</span>
+                            {% elif ms.review_status == 'reviewed' %}
+                            <span style="background: #f0fdf4; color: #86efac; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Reviewed</span>
                             {% else %}
-                            —
+                            <span style="color: #d1d5db;">—</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            {% if payment_confirmations %}
+            <div style="margin-top: 10px; text-align: center;">
+                <a href="javascript:void(0)" onclick="openFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
+            </div>
+            {% endif %}
+            <button type="button" onclick="document.getElementById('monthly-summary-full').style.display='none';document.getElementById('monthly-summary-collapsed').style.display='block';" style="margin-top: 8px; background: none; border: 1px solid #e5e7eb; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; color: #6b7280; cursor: pointer;">Hide monthly summary</button>
+            </div>
         </div>
         {% endif %}
 
         {# ---- PAYMENT SUBMISSIONS SECTION (Step 8) ---- #}
-        <div id="payment-submissions" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+        <div id="payment-submissions" style="display: none; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
             <h3 style="font-size: 1.1em; margin-bottom: 4px;">Payment Submissions (Unverified)</h3>
             <p style="color: #777; font-size: 0.85em; margin: 0 0 16px 0;">
                 These are tenant-declared submissions. The app does not verify payments.
@@ -2676,7 +2673,7 @@
                 {% set ns.prev_year = pc.period_year %}
                 {% endif %}
 
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px;">
+                <div data-period-month="{{ pc.period_month }}" data-period-year="{{ pc.period_year }}" style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px;">
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
                         <span style="background: #6b7280; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Unverified</span>
                         <span style="font-weight: 600; font-size: 0.9em;">
@@ -2742,7 +2739,7 @@
                                 <span style="background: #f3f4f6; color: #374151; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Landlord</span>
                                 {% endif %}
                                 {% if ev.event_type == 'acknowledged' %}
-                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Acknowledged</span>
+                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">{% if convo.thread|length > 0 %}Resolved{% else %}Acknowledged{% endif %}</span>
                                 {% elif ev.event_type == 'flagged' %}
                                 <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Flagged</span>
                                 {% elif ev.event_type == 'noted' %}
@@ -2788,7 +2785,7 @@
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
                             <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0;">
                                 <input type="hidden" name="review_type" value="acknowledged">
-                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge &amp; close</button>
+                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Resolve</button>
                             </form>
                             <details style="margin: 0;">
                                 <summary style="font-size: 0.8em; color: #555; cursor: pointer; padding: 5px 0;">Note &amp; close...</summary>
@@ -2846,58 +2843,88 @@
             {% endif %}
         </div>
 
-    </div>
+        {# ---- TENANT ACCESS SECTION (Step 7) ---- #}
+        <div class="tenant-access-section" style="margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            <h3 style="font-size: 1.1em; margin-bottom: 12px;">Tenant Access</h3>
 
-    {% if lease_versions and lease_versions|length > 1 %}
-    <!-- LEASE VERSION HISTORY -->
-    <div class="version-history">
-        <div class="version-history-header">
-            <h3>Lease History</h3>
-            <span class="version-count">{{ lease_versions|length }} version{% if lease_versions|length != 1 %}s{% endif %}</span>
-        </div>
-        <div class="version-list">
-            {% for version in lease_versions %}
-            <div class="version-item {% if version.is_current %}current{% else %}previous{% endif %}">
-                <span class="version-badge">v{{ version.version or 1 }}</span>
-                <div class="version-details">
-                    <div class="version-detail">
-                        <span class="version-detail-label">Start:</span>
-                        <span class="version-detail-value">{{ (version.current_values.lease_start_date if version.current_values) or '—' }}</span>
-                    </div>
-                    <div class="version-detail">
-                        <span class="version-detail-label">End:</span>
-                        <span class="version-detail-value">{{ (version.current_values.lease_end_date if version.current_values) or '—' }}</span>
-                    </div>
-                    <div class="version-detail">
-                        <span class="version-detail-label">File:</span>
-                        <span class="version-detail-value">{{ (version.source_document.filename if version.source_document) or '—' }}</span>
-                    </div>
-                </div>
-                <span class="version-status {% if version.is_current %}current{% else %}previous{% endif %}">
-                    {% if version.is_current %}Current / Latest{% else %}Previous{% endif %}
-                </span>
-                <div class="version-actions">
-                    {% if version.id == lease_data.id %}
-                    <span class="btn-view-version viewing">Viewing</span>
-                    {% else %}
-                    <a href="/?lease_id={{ version.id }}" class="btn-view-version">View</a>
-                    {% endif %}
-                    <button type="button" class="btn-delete-version"
-                            onclick="openVersionDeleteModal('{{ version.id }}', '{{ version.version or 1 }}', {{ 'true' if version.is_current else 'false' }}, {{ lease_versions|length }})">
-                        Delete
-                    </button>
-                </div>
+            <div id="tenant-access-collapsed">
+                <p style="color: #555; font-size: 0.9em; margin: 0 0 12px 0;">Generate a secure link for your tenant to submit payment confirmations.</p>
+                <button type="button" onclick="document.getElementById('tenant-access-collapsed').style.display='none';document.getElementById('tenant-access-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">View tenant access</button>
             </div>
-            {% endfor %}
+
+            <div id="tenant-access-full" style="display: none;">
+            {% if active_tenant_token %}
+            {# ACTIVE TOKEN STATE #}
+            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="background: #16a34a; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Active</span>
+                    <span style="color: #777; font-size: 0.85em;">Issued {{ active_tenant_token.issued_at[:10] }}</span>
+                </div>
+                <p style="color: #555; font-size: 0.9em; margin: 0 0 8px 0;">Anyone with this link can submit payment confirmations for this lease.</p>
+
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: 600; font-size: 0.9em;">Token: </span>
+                    <code id="tenant-token-masked" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">****{{ active_tenant_token.token[-8:] }}</code>
+                    <code id="tenant-token-full" style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px; display: none;">{{ active_tenant_token.token }}</code>
+                    <button type="button" onclick="var m=document.getElementById('tenant-token-masked'),f=document.getElementById('tenant-token-full');if(f.style.display==='none'){f.style.display='inline';m.style.display='none';this.textContent='Hide'}else{f.style.display='none';m.style.display='inline';this.textContent='Reveal'}" style="background:none;border:1px solid #ccc;padding:2px 8px;border-radius:3px;font-size:0.85em;cursor:pointer;margin-left:4px;">Reveal</button>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <span style="font-weight: 600; font-size: 0.9em;">Tenant URL: </span>
+                    <input type="text" id="tenant-url" readonly value="{{ request.host_url }}tenant/{{ active_tenant_token.token }}" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; margin-top: 4px; background: #f9fafb;">
+                    <button type="button" onclick="var u=document.getElementById('tenant-url');u.select();document.execCommand('copy');this.textContent='Copied!';setTimeout(function(){document.querySelector('#copy-link-btn').textContent='Copy link'},2000)" id="copy-link-btn" style="margin-top: 4px; background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Copy link</button>
+                </div>
+
+                <details style="margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                    <summary style="cursor: pointer; color: #dc2626; font-weight: 600; font-size: 0.9em;">Revoke Tenant Access</summary>
+                    <form method="POST" action="{{ url_for('revoke_token_route', lease_group_id=lease_data.lease_group_id) }}" style="margin-top: 8px;">
+                        <input type="hidden" name="token" value="{{ active_tenant_token.token }}">
+                        <label style="display: block; font-size: 0.85em; color: #555; margin-bottom: 4px;">Reason (optional):</label>
+                        <input type="text" name="revoke_reason" placeholder="e.g. Tenant changed" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; margin-bottom: 8px;">
+                        <button type="submit" style="background: #dc2626; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Revoke Access</button>
+                    </form>
+                </details>
+            </div>
+
+            {% else %}
+            {# NO ACTIVE TOKEN STATE #}
+            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                <p style="color: #555; font-size: 0.9em; margin: 0 0 12px 0;">No tenant access link has been generated yet.</p>
+                <form method="POST" action="{{ url_for('generate_token_route', lease_group_id=lease_data.lease_group_id) }}">
+                    <button type="submit" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Generate Tenant Link</button>
+                </form>
+            </div>
+            {% endif %}
+
+            {# REVOKED TOKENS (shown muted) #}
+            {% set revoked_tokens = tenant_tokens|selectattr('is_active', 'equalto', false)|list %}
+            {% if revoked_tokens %}
+            <details style="margin-top: 8px;">
+                <summary style="cursor: pointer; color: #777; font-size: 0.85em;">Previous access links ({{ revoked_tokens|length }})</summary>
+                {% for rt in revoked_tokens %}
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; margin-top: 8px; opacity: 0.7;">
+                    <span style="background: #9ca3af; color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px;">Revoked</span>
+                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Issued {{ rt.issued_at[:10] }}</span>
+                    {% if rt.revoked_at %}
+                    <span style="color: #777; font-size: 0.8em; margin-left: 6px;">Revoked {{ rt.revoked_at[:10] }}</span>
+                    {% endif %}
+                    {% if rt.revoked_reason %}
+                    <span style="color: #777; font-size: 0.8em; display: block; margin-top: 4px;">Reason: {{ rt.revoked_reason }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </details>
+            {% endif %}
+            </div>
         </div>
+
     </div>
-    {% endif %}
 
     {% elif edit_mode %}
     <!-- EDIT MODE: Form pre-filled with existing data -->
     <div class="dashboard-nav">
-        <a href="/" class="dashboard-nav-link">
-            <span>←</span> Back
+        <a href="{% if lease_data.status == 'active' %}/?lease_id={{ lease_data.id }}{% else %}/{% endif %}" class="dashboard-nav-link">
+            <span>←</span> {% if lease_data.status == 'active' %}Back to Lease{% else %}Back{% endif %}
         </a>
     </div>
     <div class="confirm-form">
@@ -2975,12 +3002,35 @@
                 <button type="submit">Save Changes</button>
                 <button type="button" class="btn-ai" onclick="aiPrefill(this)">🤖 Auto-fill using AI</button>
                 <button type="button" class="btn-ai" id="btnReturnPreview" style="display:none;" onclick="reopenAiPreview()">Return to AI Preview</button>
-                <a href="/" class="btn-cancel">Cancel</a>
+                <a href="{% if lease_data.status == 'active' %}/?lease_id={{ lease_data.id }}{% else %}/{% endif %}" class="btn-cancel">Cancel</a>
             </div>
             <div class="ai-message"></div>
             <div class="unified-changes-container" id="unifiedChanges"></div>
         </form>
     </div>
+
+    <script>
+    var hasUnsavedChanges = false;
+    (function() {
+        var form = document.querySelector('form[action*="save_lease"]');
+        if (!form) return;
+
+        form.addEventListener('input', function() { hasUnsavedChanges = true; });
+        form.addEventListener('change', function() { hasUnsavedChanges = true; });
+        form.addEventListener('submit', function() { hasUnsavedChanges = false; });
+
+        var exitLinks = document.querySelectorAll('.dashboard-nav-link, .btn-cancel');
+        exitLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                if (hasUnsavedChanges) {
+                    if (!confirm('You have unsaved changes. Leave without saving?')) {
+                        e.preventDefault();
+                    }
+                }
+            });
+        });
+    })();
+    </script>
 
     {% else %}
     <!-- NO LEASE: Upload form + confirmation flow -->
@@ -3453,6 +3503,7 @@ function applyAiPreview() {
 
     // Mark AI as applied and disable the button
     aiHasBeenApplied = true;
+    hasUnsavedChanges = true;
     const aiButton = form.querySelector('.btn-ai');
     if (aiButton) {
         aiButton.disabled = true;
@@ -3818,20 +3869,6 @@ function toggleFlagWarning(select) {
     if (warning) warning.style.display = select.value === 'flagged' ? 'block' : 'none';
 }
 
-function toggleVersionChanges() {
-    const section = document.getElementById('versionChangesSection');
-    const button = document.querySelector('.btn-toggle-changes');
-    if (section) {
-        if (section.style.display === 'none') {
-            section.style.display = 'block';
-            if (button) button.textContent = 'Hide changes from previous version';
-        } else {
-            section.style.display = 'none';
-            if (button) button.textContent = 'View changes from previous version';
-        }
-    }
-}
-
 // Initialize unified changes display in Edit Mode
 function initUnifiedChanges(form) {
     const versionChangesJson = form.dataset.versionChanges;
@@ -4183,6 +4220,61 @@ document.getElementById('deleteModalForm').addEventListener('submit', function(e
     </div>
 </div>
 
+<!-- CHANGES FROM PREVIOUS LEASE MODAL -->
+{% if version_changes and version_changes|length > 0 %}
+<div class="text-modal-overlay" id="changesModal">
+    <div class="text-modal">
+        <div class="text-modal-header">
+            <h3>Changes from Previous Lease</h3>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="window.print()" style="background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 500; color: #0369a1; cursor: pointer;">Print</button>
+                <button type="button" class="text-modal-close" onclick="closeChangesModal()">Close</button>
+            </div>
+        </div>
+        <div class="text-modal-body">
+            {% for change in version_changes %}
+            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6;">
+                <span style="font-weight: 500; color: #374151;">{{ change.label }}</span>
+                <span>
+                    {% if change.change_type == 'unchanged' %}
+                        {{ change.new_value | format_money }}
+                        <span style="color: #9ca3af; font-size: 0.85em; margin-left: 6px;">(No change from previous lease)</span>
+                    {% elif change.change_type == 'added' %}
+                        <span class="change-added">{{ change.new_value | format_money }}</span>
+                        <span class="change-note">(new)</span>
+                    {% elif change.change_type == 'removed' %}
+                        <span class="change-removed">{{ (change.old_value or '—') | format_money }}</span>
+                        <span class="change-note">(removed)</span>
+                    {% else %}
+                        <span class="change-old">{{ (change.old_value or '—') | format_money }}</span>
+                        <span class="change-arrow">→</span>
+                        <span class="change-new">{{ (change.new_value or '—') | format_money }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- PER-MONTH SUBMISSIONS MODAL -->
+<div class="text-modal-overlay" id="submissionsModal">
+    <div class="text-modal">
+        <div class="text-modal-header">
+            <h3 id="submissionsModalTitle">Submissions</h3>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" id="submissionsBackBtn" style="display: none;" class="text-modal-close" onclick="backToMonthView()">Back</button>
+                <button type="button" id="submissionsPrintBtn" style="display: none;" class="text-modal-close" onclick="window.print()">Print</button>
+                <button type="button" id="submissionsHistoryBtn" class="text-modal-close" onclick="viewFullHistory()">View full history</button>
+                <button type="button" class="text-modal-close" onclick="closeSubmissionsModal()">Close</button>
+            </div>
+        </div>
+        <div class="text-modal-body" id="submissionsModalBody">
+        </div>
+    </div>
+</div>
+
 <script>
 function openTextModal() {
     const modal = document.getElementById('textModal');
@@ -4210,8 +4302,193 @@ document.addEventListener('keydown', function(e) {
         if (textModal && textModal.classList.contains('visible')) {
             closeTextModal();
         }
+        const changesModal = document.getElementById('changesModal');
+        if (changesModal && changesModal.classList.contains('visible')) {
+            closeChangesModal();
+        }
+        const submissionsModal = document.getElementById('submissionsModal');
+        if (submissionsModal && submissionsModal.classList.contains('visible')) {
+            closeSubmissionsModal();
+        }
     }
 });
+
+// CHANGES MODAL FUNCTIONS
+function openChangesModal() {
+    const modal = document.getElementById('changesModal');
+    if (modal) {
+        modal.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeChangesModal() {
+    const modal = document.getElementById('changesModal');
+    if (modal) {
+        modal.classList.remove('visible');
+        document.body.style.overflow = '';
+    }
+}
+
+var changesModalEl = document.getElementById('changesModal');
+if (changesModalEl) {
+    changesModalEl.addEventListener('click', function(e) {
+        if (e.target === this) closeChangesModal();
+    });
+}
+
+// SUBMISSIONS MODAL FUNCTIONS
+var submissionsState = { month: null, year: null, monthName: null, viewMode: 'month', origin: 'month' };
+
+function openSubmissionsModal(month, year, monthName) {
+    submissionsState.month = month;
+    submissionsState.year = year;
+    submissionsState.monthName = monthName;
+    submissionsState.viewMode = 'month';
+    submissionsState.origin = 'month';
+
+    var modal = document.getElementById('submissionsModal');
+    var body = document.getElementById('submissionsModalBody');
+    var title = document.getElementById('submissionsModalTitle');
+    var storage = document.getElementById('payment-submissions');
+    if (!modal || !body) return;
+
+    // Defensive: move any leftover cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Ensure review mode (not history)
+    body.classList.remove('history-view');
+
+    // Move only matching month cards
+    var allCards = document.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) {
+        if (String(card.dataset.periodMonth) === String(month) &&
+            String(card.dataset.periodYear) === String(year)) {
+            body.appendChild(card);
+        }
+    });
+
+    // Set title and button visibility for month view
+    title.textContent = 'Submissions for ' + monthName + ' ' + year;
+    document.getElementById('submissionsHistoryBtn').style.display = '';
+    document.getElementById('submissionsBackBtn').style.display = 'none';
+    document.getElementById('submissionsPrintBtn').style.display = 'none';
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function openFullHistoryModal() {
+    submissionsState.month = null;
+    submissionsState.year = null;
+    submissionsState.monthName = null;
+    submissionsState.viewMode = 'history';
+    submissionsState.origin = 'page';
+
+    var modal = document.getElementById('submissionsModal');
+    var body = document.getElementById('submissionsModalBody');
+    var title = document.getElementById('submissionsModalTitle');
+    var storage = document.getElementById('payment-submissions');
+    if (!modal || !body) return;
+
+    // Defensive: move any leftover cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Enable history (read-only) mode
+    body.classList.add('history-view');
+
+    // Move ALL submission cards into modal
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) { body.appendChild(card); });
+
+    // Set title and button visibility — no Back (opened from page)
+    title.textContent = 'All Payment Submissions';
+    document.getElementById('submissionsHistoryBtn').style.display = 'none';
+    document.getElementById('submissionsBackBtn').style.display = 'none';
+    document.getElementById('submissionsPrintBtn').style.display = '';
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function viewFullHistory() {
+    submissionsState.viewMode = 'history';
+    var body = document.getElementById('submissionsModalBody');
+    var title = document.getElementById('submissionsModalTitle');
+    var storage = document.getElementById('payment-submissions');
+    if (!body || !storage) return;
+
+    // Move current cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Enable history (read-only) mode
+    body.classList.add('history-view');
+
+    // Move ALL submission cards into modal
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) { body.appendChild(card); });
+
+    // Set title and button visibility — Back shows with month context
+    title.textContent = 'All Payment Submissions';
+    document.getElementById('submissionsHistoryBtn').style.display = 'none';
+    var backBtn = document.getElementById('submissionsBackBtn');
+    backBtn.textContent = 'Back to ' + submissionsState.monthName + ' ' + submissionsState.year;
+    backBtn.style.display = '';
+    document.getElementById('submissionsPrintBtn').style.display = '';
+}
+
+function backToMonthView() {
+    submissionsState.viewMode = 'month';
+    var body = document.getElementById('submissionsModalBody');
+    var title = document.getElementById('submissionsModalTitle');
+    var storage = document.getElementById('payment-submissions');
+    if (!body || !storage) return;
+
+    // Move all cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Disable history mode (restore interactivity)
+    body.classList.remove('history-view');
+
+    // Move only the original month's cards back in
+    var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
+    allCards.forEach(function(card) {
+        if (String(card.dataset.periodMonth) === String(submissionsState.month) &&
+            String(card.dataset.periodYear) === String(submissionsState.year)) {
+            body.appendChild(card);
+        }
+    });
+
+    // Restore title and button visibility for month view
+    title.textContent = 'Submissions for ' + submissionsState.monthName + ' ' + submissionsState.year;
+    document.getElementById('submissionsHistoryBtn').style.display = '';
+    document.getElementById('submissionsBackBtn').style.display = 'none';
+    document.getElementById('submissionsPrintBtn').style.display = 'none';
+}
+
+function closeSubmissionsModal() {
+    var modal = document.getElementById('submissionsModal');
+    var body = document.getElementById('submissionsModalBody');
+    var storage = document.getElementById('payment-submissions');
+    if (!modal || !body || !storage) return;
+
+    // Always move all cards back to storage
+    while (body.firstChild) { storage.appendChild(body.firstChild); }
+
+    // Reset state
+    body.classList.remove('history-view');
+    submissionsState.viewMode = 'month';
+    submissionsState.origin = 'month';
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+var submissionsModalEl = document.getElementById('submissionsModal');
+if (submissionsModalEl) {
+    submissionsModalEl.addEventListener('click', function(e) {
+        if (e.target === this) closeSubmissionsModal();
+    });
+}
 
 // PDF MODAL FUNCTIONS
 function openPdfModal() {

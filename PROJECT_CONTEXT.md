@@ -49,8 +49,243 @@ For ALL future work on this project:
 
 Violating these rules is considered a critical error.
 
+                                                                                  
+  ----------------------------------------------------------------
+  UPDATED — 8 FEBRUARY 2026                                                                                             
+  ----------------------------------------------------------------    
+
+  Lease View & Submission UI Overhaul (LV Series)
+
+  All changes below are presentational and interaction improvements.
+  No data model, schema, or backend logic changes unless noted.
+
+  ----------------------------------------------------------------
+
+  LV-2: Lease Comparison Field Ordering
+  Status: IMPLEMENTED
+
+  Reordered fields_to_compare in compare_lease_versions() to:
+  1. Tenant Name
+  2. Monthly Rent
+  3. Security Deposit
+  4. Rent Due Day
+  5. Start Date
+  6. End Date
+  7. Lock-in Period
+  8. Rent Escalation
+
+  Both simple and nested field sections updated.
+  No schema or data changes.
+
+  ----------------------------------------------------------------
+
+  LV-3: Monthly Summary Ordering + Tenant Access Collapse
+  Status: IMPLEMENTED
+
+  Part A — Monthly summary reverse ordering:
+  - Added monthly_summary.reverse() after list construction
+  - Latest month now appears first in both landlord and tenant views
+
+  Part B — Tenant Access section collapse:
+  - Collapsed by default on page load
+  - "View tenant access" button reveals section (one-way expand)
+
+  ----------------------------------------------------------------
+
+  LV-4: Lease Comparison Modal + Unchanged Fields
+  Status: IMPLEMENTED
+
+  Backend (app.py):
+  - compare_lease_versions() now includes ALL 8 fields, even if
+    unchanged between versions
+  - Unchanged fields tagged with change_type = "unchanged" and
+    display "(No change from previous lease)"
+
+  Template (index.html):
+  - Inline toggle replaced with modal (#changesModal)
+  - Modal shows all 8 fields with change status
+  - Print button added to modal header
+  - @media print CSS scopes printable content to modal only
+  - Click-outside and Escape key close handlers
+
+  ----------------------------------------------------------------
+
+  LV-5: Monthly Submission Summary Visual Refinement
+  Status: IMPLEMENTED
+
+  Template (index.html):
+  - Table reduced from 4 columns to 3 (removed Status column)
+  - Remaining columns: Month, Submissions, Review
+  - Status badges with priority-based styling:
+    - tenant_replied / flagged: bold, prominent
+    - reviewed: muted green
+  - Empty months shown as neutral grey
+
+  ----------------------------------------------------------------
+
+  Lease Version History Collapse + Rename
+  Status: IMPLEMENTED
+
+  Template (index.html):
+  - Heading renamed to "Lease Version History"
+  - Section collapsed by default
+  - "View lease history" / "Hide lease history" toggle buttons
+
+  ----------------------------------------------------------------
+
+  LV-6: Per-Month Submission Modal (Landlord)
+  Status: IMPLEMENTED
+
+  Architecture:
+  - Submission cards tagged with data-period-month and
+    data-period-year attributes
+  - Hidden storage container holds all server-rendered cards
+  - Modal populated via DOM node movement (appendChild) — cards
+    are MOVED, never cloned, preserving forms/handlers/state
+  - Defensive cleanup: always move existing children back to
+    storage before populating modal
+
+  Template (index.html):
+  - #submissionsModal with header buttons:
+    - Back (context-dependent label)
+    - Print
+    - View full history
+    - Close
+  - All buttons use text-modal-close class for consistent styling
+  - IDs: submissionsBackBtn, submissionsPrintBtn,
+    submissionsHistoryBtn
+
+  JS state management:
+  - submissionsState object tracks: month, year, monthName,
+    viewMode ('month'|'history'), origin ('month'|'page')
+  - Functions: openSubmissionsModal(), openFullHistoryModal(),
+    viewFullHistory(), backToMonthView(), closeSubmissionsModal()
+
+  Monthly summary table rows:
+  - Clickable only when submission count > 0
+  - Empty months are not interactive
+
+  ----------------------------------------------------------------
+
+  Monthly Submission Summary Collapse (Landlord)
+  Status: IMPLEMENTED
+
+  - Collapsed by default with "Show monthly summary" /
+    "Hide monthly summary" toggle buttons
+
+  ----------------------------------------------------------------
+
+  LV-7: Tenant UI Overhaul
+  Status: IMPLEMENTED
+
+  Backend (app.py — tenant_page route):
+  - Extracts lease_start_date / lease_end_date from current lease
+  - Computes full monthly_summary with tenant-specific status logic:
+    - reply_from_landlord (priority 1)
+    - flagged (priority 2)
+    - submitted (priority 3)
+    - resolved (priority 4)
+  - Passes monthly_summary to template
+
+  Template (tenant_confirm.html):
+  - Page <title> changed to "Tenant Interface"
+  - Monthly summary table added as primary view (NOT collapsed)
+    - Heading: "Your Monthly Submissions"
+    - 3 columns matching landlord layout
+    - Rows clickable only when count > 0
+  - Submission form hidden by default
+    - "+ Add new submission" link reveals form and scrolls to it
+  - Past submissions hidden in storage container
+    - Cards tagged with data-period-month / data-period-year
+    - Used by modal via DOM movement (same pattern as landlord)
+
+  Tenant modal (#tenantSubmissionsModal):
+  - Same structure and behavior as landlord modal
+  - tenantState object mirrors submissionsState
+  - Functions: openTenantSubmissionsModal(),
+    openTenantFullHistoryModal(), tenantViewFullHistory(),
+    tenantBackToMonthView(), closeTenantSubmissionsModal()
+  - Click-outside and Escape key close handlers
+  - @media print CSS for tenant modal
+
+  ----------------------------------------------------------------
+
+  Full History Mode (Landlord + Tenant)
+  Status: IMPLEMENTED
+
+  Adds a read-only audit view of ALL submissions across all months,
+  accessible from two entry points:
+
+  1. From within a per-month modal:
+     - "View full history" button switches to history mode
+     - Back button shows "Back to [Month Year]"
+     - origin tracked as 'month'
+
+  2. From page level:
+     - "View full submission history" link below summary table
+     - Opens directly in history mode
+     - Back button hidden (origin tracked as 'page')
+     - Link wrapped in {% if payment_confirmations %} conditional
+
+  History mode behavior:
+  - CSS class 'history-view' added to modal body
+  - Hides all form and details elements with display: none !important
+  - Cards shown in chronological order (all months)
+  - Strictly read-only — no ability to respond or review
+  - Print button visible in history mode
+
+  Implemented identically for both landlord and tenant UIs.
+
+  ----------------------------------------------------------------
+
+  Attention Badges (Landlord + Tenant)
+  Status: IMPLEMENTED
+
+  Landlord heading (index.html):
+  - Blue pill badge on "Monthly Submission Summary" heading
+  - Counts months with review_status of 'tenant_replied' or
+    'pending'
+  - Uses Jinja2 namespace pattern for counting across loops
+  - Text: "N needs attention" / "N need attention"
+
+  Tenant heading (tenant_confirm.html):
+  - Amber pill badge on "Your Monthly Submissions" heading
+  - Counts months with review_status of 'reply_from_landlord'
+    or 'flagged'
+  - Same namespace counting pattern
+  - Same text format
+
+  Badges hidden when count is 0.
+
+  ----------------------------------------------------------------
+
+  Key Technical Patterns Established (8 Feb)
+
+  1. DOM Node Movement: Server-rendered submission cards are moved
+     (not cloned) between a hidden storage container and modals
+     using appendChild. This preserves form state, event handlers,
+     and avoids duplication bugs.
+
+  2. Modal State Objects: JS objects (submissionsState, tenantState)
+     track current month, viewMode, and origin to manage button
+     visibility and navigation behavior.
+
+  3. History View CSS: A single CSS class ('history-view') on the
+     modal body hides all interactive elements (form, details)
+     with !important, making the view read-only without DOM changes.
+
+  4. Defensive Cleanup: Modal close functions always move ALL cards
+     back to storage, remove history-view class, and reset state —
+     regardless of current view mode.
+
+  5. Jinja2 Namespace Counting: {% set ns = namespace(count=0) %}
+     pattern used to accumulate counts across for-loop iterations
+     for attention badges.
+
+  ----------------------------------------------------------------
+
 -----------------------------------------------------------------
-NEW FEATURE - STARTED ON 7 FEB 2026
+UPDATE - 7 FEB 2026
 -----------------------------------------------------------------
 
                                                                                          

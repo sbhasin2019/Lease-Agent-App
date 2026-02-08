@@ -1529,12 +1529,12 @@ def compare_lease_versions(current_lease, previous_lease):
 
     # Fields to compare with their display labels
     fields_to_compare = [
-        ("lease_start_date", "Start Date"),
-        ("lease_end_date", "End Date"),
+        ("lessee_name", "Tenant Name"),
         ("monthly_rent", "Monthly Rent"),
         ("security_deposit", "Security Deposit"),
         ("rent_due_day", "Rent Due Day"),
-        ("lessee_name", "Tenant Name"),
+        ("lease_start_date", "Start Date"),
+        ("lease_end_date", "End Date"),
     ]
 
     # Nested fields
@@ -1561,12 +1561,10 @@ def compare_lease_versions(current_lease, previous_lease):
         if old_normalized is None and new_normalized is None:
             continue
 
-        # Skip if equal
-        if str(old_normalized) == str(new_normalized):
-            continue
-
         # Determine change type
-        if old_normalized is None:
+        if str(old_normalized) == str(new_normalized):
+            change_type = "unchanged"
+        elif old_normalized is None:
             change_type = "added"
         elif new_normalized is None:
             change_type = "removed"
@@ -1596,12 +1594,10 @@ def compare_lease_versions(current_lease, previous_lease):
         if old_normalized is None and new_normalized is None:
             continue
 
-        # Skip if equal
-        if str(old_normalized) == str(new_normalized):
-            continue
-
         # Determine change type
-        if old_normalized is None:
+        if str(old_normalized) == str(new_normalized):
+            change_type = "unchanged"
+        elif old_normalized is None:
             change_type = "added"
         elif new_normalized is None:
             change_type = "removed"
@@ -1742,17 +1738,65 @@ def index():
             end_year, end_month = now.year, now.month
             y, m = start_year, start_month
             while (y, m) <= (end_year, end_month):
-                count = sum(1 for c in payment_confirmations
-                            if c.get("period_year") == y and c.get("period_month") == m)
+                month_payments = [c for c in payment_confirmations
+                                  if c.get("period_year") == y and c.get("period_month") == m]
+                count = len(month_payments)
+
+                # Derive review status from existing event data
+                review_status = "not_submitted"
+                review_date = None
+
+                if count > 0:
+                    has_any_event = False
+                    all_have_events = True
+                    worst_priority = 4  # reviewed (lowest concern)
+
+                    for pc in month_payments:
+                        pid = pc.get("id")
+                        pc_events = payment_events.get(pid, [])
+                        landlord_events = [e for e in pc_events if e.get("actor") == "landlord"]
+
+                        if landlord_events:
+                            has_any_event = True
+                        else:
+                            all_have_events = False
+
+                        convo = payment_conversation.get(pid, {"open": False, "thread": []})
+                        if convo["open"] and convo["thread"]:
+                            last_event = convo["thread"][-1]
+                            if last_event.get("actor") == "tenant":
+                                if worst_priority > 1:
+                                    worst_priority = 1
+                                    review_date = last_event.get("created_at")
+                            else:
+                                if worst_priority > 2:
+                                    worst_priority = 2
+                                    review_date = last_event.get("created_at")
+
+                    if worst_priority == 1:
+                        review_status = "tenant_replied"
+                    elif worst_priority == 2:
+                        review_status = "flagged"
+                    elif not has_any_event:
+                        review_status = "pending"
+                        review_date = None
+                    else:
+                        review_status = "reviewed"
+                        review_date = None
+
                 monthly_summary.append({
                     "year": y, "month": m,
                     "month_name": month_names[m - 1],
                     "count": count,
+                    "review_status": review_status,
+                    "review_date": review_date,
                 })
                 m += 1
                 if m > 12:
                     m = 1
                     y += 1
+
+            monthly_summary.reverse()
 
     return render_template("index.html",
                            uploads=uploads,
@@ -2595,10 +2639,14 @@ def tenant_page(token):
     # Extract display context from current lease (if it exists)
     lease_nickname = None
     agreed_rent = None
+    lease_start_date = None
+    lease_end_date = None
     if current_lease:
         cv = current_lease.get("current_values", {})
         lease_nickname = cv.get("lease_nickname") or "Untitled Lease"
         agreed_rent = cv.get("monthly_rent")
+        lease_start_date = cv.get("lease_start_date")
+        lease_end_date = cv.get("lease_end_date")
 
     # Load past submissions and events for tenant view (Phase 2)
     payment_confirmations = get_payments_for_lease_group(lease_group_id)
@@ -2618,6 +2666,89 @@ def tenant_page(token):
     for pid, events in payment_events.items():
         payment_conversation[pid] = get_conversation_state(events)
 
+    # Compute monthly summary for tenant
+    month_names = ["January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"]
+    monthly_summary = []
+    if lease_start_date:
+        try:
+            start_parts = lease_start_date.split("-")
+            start_year, start_month = int(start_parts[0]), int(start_parts[1])
+
+            if lease_end_date:
+                end_parts = lease_end_date.split("-")
+                end_year, end_month = int(end_parts[0]), int(end_parts[1])
+            else:
+                today = datetime.now()
+                end_year, end_month = today.year, today.month
+
+            # Extend to current month if lease is still active
+            today = datetime.now()
+            if (end_year, end_month) < (today.year, today.month):
+                pass  # lease ended, use lease end date
+            else:
+                end_year, end_month = today.year, today.month
+
+            y, m = start_year, start_month
+            while (y, m) <= (end_year, end_month):
+                month_payments = [c for c in payment_confirmations
+                                  if c.get("period_year") == y and c.get("period_month") == m]
+                count = len(month_payments)
+
+                review_status = "not_submitted"
+                if count > 0:
+                    worst_priority = 4  # resolved
+                    for pc in month_payments:
+                        pid = pc.get("id")
+                        convo = payment_conversation.get(pid, {"open": False, "thread": []})
+
+                        # Filter to tenant-visible events (flagged/response only)
+                        visible_events = [e for e in convo.get("thread", [])
+                                          if e.get("event_type") in ("flagged", "response")]
+
+                        if not visible_events:
+                            # No visible events — just submitted
+                            if worst_priority > 3:
+                                worst_priority = 3
+                        elif convo["open"]:
+                            last_visible = visible_events[-1]
+                            if last_visible.get("actor") == "landlord":
+                                # Landlord replied/flagged, tenant should respond
+                                if worst_priority > 1:
+                                    worst_priority = 1
+                            else:
+                                # Tenant replied, waiting for landlord
+                                if worst_priority > 2:
+                                    worst_priority = 2
+                        else:
+                            # Closed conversation
+                            if worst_priority > 4:
+                                worst_priority = 4
+
+                    if worst_priority == 1:
+                        review_status = "reply_from_landlord"
+                    elif worst_priority == 2:
+                        review_status = "flagged"
+                    elif worst_priority == 3:
+                        review_status = "submitted"
+                    else:
+                        review_status = "resolved"
+
+                monthly_summary.append({
+                    "year": y, "month": m,
+                    "month_name": month_names[m - 1],
+                    "count": count,
+                    "review_status": review_status,
+                })
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+
+            monthly_summary.reverse()
+        except (ValueError, IndexError):
+            pass  # If date parsing fails, skip summary
+
     return render_template("tenant_confirm.html",
                            token_valid=True,
                            token=token,
@@ -2627,6 +2758,7 @@ def tenant_page(token):
                            payment_confirmations=payment_confirmations,
                            payment_events=payment_events,
                            payment_conversation=payment_conversation,
+                           monthly_summary=monthly_summary,
                            success=False)
 
 
