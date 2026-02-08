@@ -284,6 +284,149 @@ Violating these rules is considered a critical error.
 
   ----------------------------------------------------------------
 
+                                                          
+  ---                                                                                                                   
+    ----------------------------------------------------------------
+                                                                                                                        
+    LV-7.1: Empty States & Helper Guidance                                                                              
+    Status: IMPLEMENTED
+    Date: 8 February 2026
+
+    Presentational only. No backend or logic changes.
+
+    Landlord UI (index.html):
+    - Helper text below "Monthly Submission Summary" heading:
+      "Click a month to review submissions or respond to tenant messages."
+    - Empty state when all months have zero submissions:
+      "No submissions yet. Tenant payment confirmations will appear
+      here once submitted."
+    - Month modal empty state (defensive):
+      "No submissions were made for this month."
+    - Full history modal empty state (defensive):
+      "No submissions exist for this lease yet."
+
+    Tenant UI (tenant_confirm.html):
+    - Helper text below "Your Monthly Submissions" heading:
+      "Click a month to view or respond to messages from your landlord."
+    - Empty state when zero submissions:
+      "You haven't submitted any payment confirmations yet.
+      Use 'Add new submission' to get started."
+    - Month modal empty state:
+      "No submissions were made for this month."
+    - Full history modal empty state:
+      "No submissions exist for this lease yet."
+
+    Technical notes:
+    - Empty states in modals use .modal-empty-state CSS class
+    - Cleanup runs in defensive section of each modal open function
+    - Empty state elements are removed from storage on next open
+    - Jinja2 namespace counting (ns_total) used for zero-submission
+      detection in monthly summary tables
+    - All 8 JS modal functions updated (4 landlord, 4 tenant):
+      openSubmissionsModal, openFullHistoryModal, viewFullHistory,
+      backToMonthView, and their tenant equivalents
+
+    ----------------------------------------------------------------
+
+    LV-7.2: Expected Monthly Payment Coverage
+    Status: IN PROGRESS (Step 1 of 7 complete)
+    Date: 8 February 2026
+
+    Goal:
+    Track whether tenants have submitted ALL required payment categories
+    for a month, not just the number of submissions.
+
+    Key concept:
+    Each lease defines which payment categories are expected monthly
+    (rent, maintenance, utilities). The system compares expected
+    categories against submitted categories to determine coverage.
+
+    Two INDEPENDENT signals per month:
+    1. Coverage: X / Y expected categories submitted (NEW)
+    2. Conversation status: flagged / replied / resolved (EXISTING)
+    Neither replaces the other.
+
+    Decisions (locked):
+    - Categories are mandatory to choose; amounts are optional
+    - Amounts are informational only (no verification or comparison)
+    - Coverage is per CATEGORY, not per submission count
+    - Use current lease version's expectations for all months
+    - Only past months within lease period are evaluated
+    - Existing leases default to rent-only expected
+    - Reminders (future) will NOT use the existing event model;
+      storage design deferred to Step 7
+
+    ----------------------------------------------------------------
+
+    LV-7.2 Step 1: Data Model Foundation
+    Status: IMPLEMENTED
+    Date: 8 February 2026
+
+    Backend only. No UI changes. No behavioural changes.
+
+    A. New field: expected_payments (inside current_values)
+    Structure:
+    [
+      { type: "rent",        expected: true,  typical_amount: <number|null> },
+      { type: "maintenance", expected: false, typical_amount: null },
+      { type: "utilities",   expected: false, typical_amount: null }
+    ]
+
+    Rules:
+    - type is limited to: rent, maintenance, utilities
+    - expected is boolean (mandatory)
+    - typical_amount is optional, informational only
+    - If expected == false, typical_amount MUST be null
+    - If expected == true, typical_amount may be null
+
+    B. New field: needs_expected_payment_confirmation (top-level)
+    - Boolean flag on the lease object (NOT inside current_values)
+    - Tracks whether landlord has confirmed expected payments
+      after a renewal
+
+    Flag behaviour:
+    - Existing leases (migration): false
+    - New lease uploads: false
+    - Renewal uploads: true
+    - Renewals via "Renew" button: true
+    - Any Edit Mode save: set to false
+
+    C. Migration
+    - _default_expected_payments(monthly_rent) helper added
+    - _migrate_lease_add_expected_payments() — adds expected_payments
+      to existing leases if missing, using monthly_rent for rent
+      typical_amount
+    - _migrate_lease_add_confirmation_flag() — adds
+      needs_expected_payment_confirmation = false to existing leases
+
+    D. Save/load/renewal paths updated
+    - save_lease(): preserves expected_payments from existing lease
+      (not editable via form yet), sets confirmation flag to false
+    - Upload (new): default expected_payments, flag = false
+    - Upload (renewal): copies expected_payments from original, flag = true
+    - create_lease_renewal(): copies expected_payments from original,
+      flag = true
+    - All paths fall back to _default_expected_payments() if original
+      lease lacks the field
+
+    Files changed: app.py only
+    No template changes. No tenant-facing changes. No coverage logic.
+
+    ----------------------------------------------------------------
+
+    LV-7.2 Implementation Plan (Remaining Steps)
+
+    Step 2: Edit Mode UI — checkboxes for expected categories,
+            optional amount fields, confirmation messaging for renewals
+    Step 3: Coverage computation helper (backend)
+    Step 4: Landlord monthly summary — X/Y column + missing badges
+    Step 5: Tenant monthly summary — same pattern
+    Step 6: Modal notices — list missing categories in per-month modals
+    Step 7: Reminder system — targeted reminders for missing categories
+
+    ---------------------------------------------------------------
+
+
 -----------------------------------------------------------------
 UPDATE - 7 FEB 2026
 -----------------------------------------------------------------

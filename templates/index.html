@@ -2592,19 +2592,23 @@
                 <span style="background: #dbeafe; color: #1e40af; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count == 1 else '' }} attention</span>
                 {% endif %}
             </h3>
+            <p style="color: #9ca3af; font-size: 0.82em; margin: 0 0 8px 0;">Click a month to review submissions or respond to tenant messages.</p>
             <div id="monthly-summary-collapsed">
                 <button type="button" onclick="document.getElementById('monthly-summary-collapsed').style.display='none';document.getElementById('monthly-summary-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Show monthly summary</button>
             </div>
             <div id="monthly-summary-full" style="display: none;">
-            <p style="color: #777; font-size: 0.85em; margin: 0 0 12px 0;">
-                This summary reflects whether the tenant submitted any declarations for a given month.
-                It does not verify payment or completeness.
-            </p>
             <style>
                 #monthly-summary tr[onclick]:hover { background: #f9fafb; }
                 #submissionsModalBody.history-view form,
                 #submissionsModalBody.history-view details { display: none !important; }
             </style>
+            {% set ns_total = namespace(count=0) %}
+            {% for ms in monthly_summary %}{% set ns_total.count = ns_total.count + ms.count %}{% endfor %}
+            {% if ns_total.count > 0 %}
+            <p style="color: #777; font-size: 0.85em; margin: 0 0 12px 0;">
+                This summary reflects whether the tenant submitted any declarations for a given month.
+                It does not verify payment or completeness.
+            </p>
             <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
                 <thead>
                     <tr style="border-bottom: 2px solid #e5e7eb;">
@@ -2641,6 +2645,9 @@
             <div style="margin-top: 10px; text-align: center;">
                 <a href="javascript:void(0)" onclick="openFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
             </div>
+            {% endif %}
+            {% else %}
+            <p style="color: #9ca3af; font-size: 0.9em; text-align: center; padding: 20px 0;">No submissions yet. Tenant payment confirmations will appear here once submitted.</p>
             {% endif %}
             <button type="button" onclick="document.getElementById('monthly-summary-full').style.display='none';document.getElementById('monthly-summary-collapsed').style.display='block';" style="margin-top: 8px; background: none; border: 1px solid #e5e7eb; padding: 6px 14px; border-radius: 4px; font-size: 0.85em; color: #6b7280; cursor: pointer;">Hide monthly summary</button>
             </div>
@@ -4355,6 +4362,8 @@ function openSubmissionsModal(month, year, monthName) {
 
     // Defensive: move any leftover cards back to storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
+    var empties = storage.querySelectorAll('.modal-empty-state');
+    empties.forEach(function(el) { el.remove(); });
 
     // Ensure review mode (not history)
     body.classList.remove('history-view');
@@ -4367,6 +4376,15 @@ function openSubmissionsModal(month, year, monthName) {
             body.appendChild(card);
         }
     });
+
+    // Empty state if no cards matched
+    if (!body.querySelector('[data-period-month]')) {
+        var p = document.createElement('p');
+        p.className = 'modal-empty-state';
+        p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
+        p.textContent = 'No submissions were made for this month.';
+        body.appendChild(p);
+    }
 
     // Set title and button visibility for month view
     title.textContent = 'Submissions for ' + monthName + ' ' + year;
@@ -4393,6 +4411,8 @@ function openFullHistoryModal() {
 
     // Defensive: move any leftover cards back to storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
+    var empties = storage.querySelectorAll('.modal-empty-state');
+    empties.forEach(function(el) { el.remove(); });
 
     // Enable history (read-only) mode
     body.classList.add('history-view');
@@ -4400,6 +4420,15 @@ function openFullHistoryModal() {
     // Move ALL submission cards into modal
     var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
     allCards.forEach(function(card) { body.appendChild(card); });
+
+    // Empty state if no cards exist
+    if (!body.querySelector('[data-period-month]')) {
+        var p = document.createElement('p');
+        p.className = 'modal-empty-state';
+        p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
+        p.textContent = 'No submissions exist for this lease yet.';
+        body.appendChild(p);
+    }
 
     // Set title and button visibility — no Back (opened from page)
     title.textContent = 'All Payment Submissions';
@@ -4420,6 +4449,8 @@ function viewFullHistory() {
 
     // Move current cards back to storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
+    var empties = storage.querySelectorAll('.modal-empty-state');
+    empties.forEach(function(el) { el.remove(); });
 
     // Enable history (read-only) mode
     body.classList.add('history-view');
@@ -4427,6 +4458,15 @@ function viewFullHistory() {
     // Move ALL submission cards into modal
     var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
     allCards.forEach(function(card) { body.appendChild(card); });
+
+    // Empty state if no cards exist
+    if (!body.querySelector('[data-period-month]')) {
+        var p = document.createElement('p');
+        p.className = 'modal-empty-state';
+        p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
+        p.textContent = 'No submissions exist for this lease yet.';
+        body.appendChild(p);
+    }
 
     // Set title and button visibility — Back shows with month context
     title.textContent = 'All Payment Submissions';
@@ -4446,6 +4486,8 @@ function backToMonthView() {
 
     // Move all cards back to storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
+    var empties = storage.querySelectorAll('.modal-empty-state');
+    empties.forEach(function(el) { el.remove(); });
 
     // Disable history mode (restore interactivity)
     body.classList.remove('history-view');
@@ -4458,6 +4500,15 @@ function backToMonthView() {
             body.appendChild(card);
         }
     });
+
+    // Empty state if no cards matched
+    if (!body.querySelector('[data-period-month]')) {
+        var p = document.createElement('p');
+        p.className = 'modal-empty-state';
+        p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
+        p.textContent = 'No submissions were made for this month.';
+        body.appendChild(p);
+    }
 
     // Restore title and button visibility for month view
     title.textContent = 'Submissions for ' + submissionsState.monthName + ' ' + submissionsState.year;

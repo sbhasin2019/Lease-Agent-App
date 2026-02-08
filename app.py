@@ -928,6 +928,12 @@ def _load_all_leases():
             # Add lock-in and renewal fields to existing leases
             if _migrate_lease_add_lock_in_and_renewal_fields(lease):
                 migrated = True
+            # Add expected payment categories
+            if _migrate_lease_add_expected_payments(lease):
+                migrated = True
+            # Add expected payment confirmation flag
+            if _migrate_lease_add_confirmation_flag(lease):
+                migrated = True
 
         # Save if any migrations occurred
         if migrated:
@@ -1042,6 +1048,50 @@ def _migrate_lease_add_lock_in_and_renewal_fields(lease):
         migrated = True
 
     return migrated
+
+
+def _default_expected_payments(monthly_rent=None):
+    """Return default expected_payments list for a lease.
+
+    Rent is always expected. Maintenance and utilities default to not expected.
+    If monthly_rent is provided, it becomes the typical_amount for rent.
+    """
+    return [
+        {"type": "rent", "expected": True, "typical_amount": monthly_rent},
+        {"type": "maintenance", "expected": False, "typical_amount": None},
+        {"type": "utilities", "expected": False, "typical_amount": None},
+    ]
+
+
+def _migrate_lease_add_expected_payments(lease):
+    """Add expected_payments to existing leases if missing.
+
+    Default: rent expected (with monthly_rent as typical_amount),
+    maintenance and utilities not expected.
+    """
+    if "current_values" not in lease:
+        return False
+
+    current_values = lease["current_values"]
+
+    if "expected_payments" in current_values:
+        return False
+
+    monthly_rent = current_values.get("monthly_rent")
+    current_values["expected_payments"] = _default_expected_payments(monthly_rent)
+    return True
+
+
+def _migrate_lease_add_confirmation_flag(lease):
+    """Add needs_expected_payment_confirmation flag if missing.
+
+    Existing leases default to false (no confirmation needed).
+    """
+    if "needs_expected_payment_confirmation" in lease:
+        return False
+
+    lease["needs_expected_payment_confirmation"] = False
+    return True
 
 
 def load_lease_data():
@@ -1229,7 +1279,12 @@ def create_lease_renewal(original_lease_id):
             "renewal_terms": {
                 "rent_escalation_percent": None
             },
+            "expected_payments": orig_cv.get(
+                "expected_payments",
+                _default_expected_payments(orig_cv.get("monthly_rent"))
+            ),
         },
+        "needs_expected_payment_confirmation": True,
     }
 
     all_data["leases"].append(new_lease)
@@ -1928,7 +1983,12 @@ def upload_file():
                 "renewal_terms": {
                     "rent_escalation_percent": None
                 },
+                "expected_payments": orig_values.get(
+                    "expected_payments",
+                    _default_expected_payments(orig_values.get("monthly_rent"))
+                ),
             },
+            "needs_expected_payment_confirmation": True,
         }
         flash_msg = "Renewal lease uploaded! Review and update the new lease terms."
     else:
@@ -1963,7 +2023,9 @@ def upload_file():
                 "renewal_terms": {
                     "rent_escalation_percent": None
                 },
+                "expected_payments": _default_expected_payments(),
             },
+            "needs_expected_payment_confirmation": False,
         }
         flash_msg = "Lease uploaded! Fill in details manually or use AI extraction."
 
@@ -2049,6 +2111,24 @@ def save_lease():
         },
     }
 
+    # Preserve expected_payments from existing lease (not editable via form yet)
+    if lease_id:
+        existing_lease = get_lease_by_id(lease_id)
+        if existing_lease:
+            existing_cv = existing_lease.get("current_values", {})
+            current_values["expected_payments"] = existing_cv.get(
+                "expected_payments",
+                _default_expected_payments(current_values.get("monthly_rent"))
+            )
+        else:
+            current_values["expected_payments"] = _default_expected_payments(
+                current_values.get("monthly_rent")
+            )
+    else:
+        current_values["expected_payments"] = _default_expected_payments(
+            current_values.get("monthly_rent")
+        )
+
     # Load existing leases
     all_data = _load_all_leases()
     leases = all_data.get("leases", [])
@@ -2061,6 +2141,7 @@ def save_lease():
                 lease["current_values"] = current_values
                 lease["updated_at"] = now
                 lease["status"] = "active"
+                lease["needs_expected_payment_confirmation"] = False
                 # source_document and ai_extraction are preserved automatically
                 break
         else:
