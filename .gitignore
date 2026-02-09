@@ -8,6 +8,7 @@ lease_data.json
 payment_data.json
 tenant_access.json
 landlord_review_data.json
+termination_data.json
 uploads/
 
 # macOS

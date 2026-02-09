@@ -636,6 +636,79 @@ def _save_landlord_review_file(data):
         return False
 
 
+def _load_all_terminations():
+    """Load the full termination event collection from JSON file.
+
+    Returns:
+        dict: {"terminations": [...]} structure,
+              or {"terminations": []} if file is missing or invalid
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "termination_data.json")
+
+    if not os.path.exists(json_path):
+        return {"terminations": []}
+
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if not content.strip():
+            return {"terminations": []}
+
+        data = json.loads(content)
+        return data
+
+    except json.JSONDecodeError:
+        return {"terminations": []}
+    except IOError:
+        return {"terminations": []}
+
+
+def _save_termination_file(data):
+    """Atomically save termination data to JSON file.
+
+    Returns:
+        bool: True on success, False on failure
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "termination_data.json")
+    tmp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "termination_data.tmp")
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, json_path)
+        return True
+    except (IOError, OSError):
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
+def get_termination_for_lease(lease_id):
+    """Look up whether a specific lease version has been terminated.
+
+    Args:
+        lease_id: The UUID string of a specific lease version (not group)
+
+    Returns:
+        dict: The termination event record if found, or None
+              At most one termination event exists per lease version.
+    """
+    if not lease_id:
+        return None
+    data = _load_all_terminations()
+    for t in data.get("terminations", []):
+        if t.get("lease_id") == lease_id:
+            return t
+    return None
+
+
 def generate_tenant_token(lease_group_id):
     """Generate a new tenant access token for a lease group.
 
@@ -1199,6 +1272,134 @@ def get_lease_versions(lease_group_id):
     versions = [l for l in all_data.get("leases", [])
                 if l.get("lease_group_id") == lease_group_id]
     return sorted(versions, key=lambda x: x.get("version", 1), reverse=True)
+
+
+def _parse_month_tuple(date_str):
+    """Parse 'YYYY-MM-DD' string to (year, month) tuple.
+
+    Args:
+        date_str: A date string in YYYY-MM-DD format
+
+    Returns:
+        tuple: (year, month) as integers, or None if invalid/missing
+    """
+    if not date_str:
+        return None
+    try:
+        parts = date_str.split("-")
+        return (int(parts[0]), int(parts[1]))
+    except (ValueError, IndexError):
+        return None
+
+
+def get_governing_lease_for_month(lease_group_id, target_year, target_month):
+    """Find the single governing lease for a specific month in a lease group.
+
+    Uses date-based selection (NOT is_current). For a given (year, month),
+    finds which lease version's term covers that month, accounting for
+    early termination events.
+
+    Args:
+        lease_group_id: UUID string of the lease group
+        target_year: int, e.g. 2025
+        target_month: int, 1-12
+
+    Returns:
+        dict with one of two structures:
+        - {"status": "IN_LEASE", "lease": <dict>, "lease_id": <str>, "version": <int>}
+        - {"status": "OUT_OF_LEASE", "reason": <str>, "lease": None}
+          where reason is one of:
+            "pre_lease"  — target month is before any lease in this group started
+            "post_lease" — target month is after all leases in this group have ended
+            "gap"        — target month falls between lease versions with no coverage
+            "terminated" — target month falls after the effective termination date
+                           of a lease version, and no other lease version governs
+                           that month
+    """
+    all_versions = get_lease_versions(lease_group_id)
+
+    if not all_versions:
+        return {"status": "OUT_OF_LEASE", "reason": "pre_lease", "lease": None}
+
+    target = (target_year, target_month)
+
+    eligible = []
+    terminated_would_match = False
+
+    for lease in all_versions:
+        if lease.get("status") == "draft":
+            continue
+
+        cv = lease.get("current_values") or {}
+        start_tuple = _parse_month_tuple(cv.get("lease_start_date"))
+        end_tuple = _parse_month_tuple(cv.get("lease_end_date"))
+
+        if start_tuple is None or end_tuple is None:
+            continue
+
+        # Determine effective end: termination overrides lease_end_date
+        effective_end = end_tuple
+        termination = get_termination_for_lease(lease.get("id"))
+        if termination:
+            term_tuple = _parse_month_tuple(termination.get("termination_date"))
+            if term_tuple is not None:
+                effective_end = term_tuple
+
+        # Check date eligibility
+        if start_tuple <= target <= effective_end:
+            eligible.append({
+                "lease": lease,
+                "start_tuple": start_tuple,
+                "version": lease.get("version", 1),
+            })
+        elif termination and start_tuple <= target <= end_tuple:
+            # Would have been eligible without termination
+            terminated_would_match = True
+
+    # Pick the best eligible lease
+    if eligible:
+        eligible.sort(
+            key=lambda x: (x["start_tuple"], x["version"]),
+            reverse=True
+        )
+        best = eligible[0]["lease"]
+        return {
+            "status": "IN_LEASE",
+            "lease": best,
+            "lease_id": best.get("id"),
+            "version": best.get("version", 1),
+        }
+
+    # No eligible lease — determine OUT_OF_LEASE reason
+    if terminated_would_match:
+        return {"status": "OUT_OF_LEASE", "reason": "terminated", "lease": None}
+
+    # Collect date ranges from all non-draft versions to determine positional reason
+    all_starts = []
+    all_ends = []
+    for lease in all_versions:
+        if lease.get("status") == "draft":
+            continue
+        cv = lease.get("current_values") or {}
+        start_tuple = _parse_month_tuple(cv.get("lease_start_date"))
+        end_tuple = _parse_month_tuple(cv.get("lease_end_date"))
+        if start_tuple is not None:
+            all_starts.append(start_tuple)
+        if end_tuple is not None:
+            all_ends.append(end_tuple)
+
+    if not all_starts:
+        return {"status": "OUT_OF_LEASE", "reason": "pre_lease", "lease": None}
+
+    earliest_start = min(all_starts)
+    latest_end = max(all_ends)
+
+    if target < earliest_start:
+        return {"status": "OUT_OF_LEASE", "reason": "pre_lease", "lease": None}
+    elif target > latest_end:
+        return {"status": "OUT_OF_LEASE", "reason": "post_lease", "lease": None}
+    else:
+        return {"status": "OUT_OF_LEASE", "reason": "gap", "lease": None}
 
 
 def cleanup_draft_leases(leases):
@@ -1907,6 +2108,12 @@ def index():
                         worst_date = None
                         worst_actor = None
                         worst_flag_date = None
+                        # Check if ANY payment in this category has landlord events
+                        cat_has_any_review = any(
+                            any(e.get("actor") == "landlord"
+                                for e in payment_events.get(pc.get("id"), []))
+                            for pc in cat_pcs
+                        )
                         for pc in cat_pcs:
                             pid = pc.get("id")
                             pc_events = payment_events.get(pid, [])
@@ -1929,7 +2136,7 @@ def index():
                                         worst_date = last_event.get("created_at")
                                         worst_actor = "landlord"
                                         worst_flag_date = flag_event.get("created_at")
-                            elif not landlord_events:
+                            elif not landlord_events and not cat_has_any_review:
                                 if worst > 3:
                                     worst = 3
                                     worst_actor = "tenant"
@@ -2845,6 +3052,10 @@ def tenant_page(token):
 
     lease_group_id = result["lease_group_id"]
 
+    # Read optional month/year prefill from query params
+    prefill_month = request.args.get("month", type=int)
+    prefill_year = request.args.get("year", type=int)
+
     # Load current lease for context (read-only)
     lease_data = _load_all_leases()
     current_lease = None
@@ -2924,10 +3135,14 @@ def tenant_page(token):
                         visible_events = [e for e in convo.get("thread", [])
                                           if e.get("event_type") in ("flagged", "response")]
 
-                        if not visible_events:
-                            # No visible events — just submitted
+                        if not visible_events and convo["open"]:
+                            # No visible events and conversation still open — just submitted
                             if worst_priority > 3:
                                 worst_priority = 3
+                        elif not visible_events and not convo["open"]:
+                            # No visible events but conversation closed — acknowledged
+                            if worst_priority > 4:
+                                worst_priority = 4
                         elif convo["open"]:
                             last_visible = visible_events[-1]
                             if last_visible.get("actor") == "landlord":
@@ -2992,14 +3207,17 @@ def tenant_page(token):
                             visible_events = [e for e in convo.get("thread", [])
                                               if e.get("event_type") in ("flagged", "response")]
 
-                            if not visible_events:
-                                # No visible events — just submitted, awaiting landlord
+                            if not visible_events and convo["open"]:
+                                # No visible events and conversation still open — just submitted
                                 if worst > 3:
                                     worst = 3
                                     worst_actor = "tenant"
                                     sub_date = pc.get("submitted_at")
                                     if worst_date is None or (sub_date and sub_date > (worst_date or "")):
                                         worst_date = sub_date
+                            elif not visible_events and not convo["open"]:
+                                # No visible events but conversation closed — acknowledged
+                                pass  # worst stays at 4
                             elif convo["open"]:
                                 last_visible = visible_events[-1]
                                 flag_event = visible_events[0]
@@ -3035,6 +3253,16 @@ def tenant_page(token):
                             "actor": worst_actor,
                             "flag_date": worst_flag_date,
                         }
+
+                    # Add missing expected categories as "not_submitted"
+                    for cat in (coverage.get("missing_categories") or []):
+                        if cat not in category_details:
+                            category_details[cat] = {
+                                "state": "not_submitted",
+                                "date": None,
+                                "actor": None,
+                                "flag_date": None,
+                            }
 
                 monthly_summary.append({
                     "year": y, "month": m,
@@ -3085,6 +3313,8 @@ def tenant_page(token):
                            payment_events=payment_events,
                            payment_conversation=payment_conversation,
                            monthly_summary=monthly_summary,
+                           prefill_month=prefill_month,
+                           prefill_year=prefill_year,
                            success=False)
 
 
@@ -3132,7 +3362,8 @@ def tenant_confirm(token):
                                agreed_rent=agreed_rent,
                                success=False,
                                errors=errors,
-                               form=request.form)
+                               form=request.form,
+                               monthly_summary=[])
 
     # --- Shared fields: month, year, disclaimer, notes ---
     errors = []
@@ -3296,7 +3527,8 @@ def tenant_confirm(token):
                            lease_group_id=lease_group_id,
                            lease_nickname=lease_nickname,
                            agreed_rent=agreed_rent,
-                           success=True)
+                           success=True,
+                           monthly_summary=[])
 
 
 if __name__ == "__main__":

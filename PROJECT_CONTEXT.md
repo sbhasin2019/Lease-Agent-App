@@ -49,6 +49,102 @@ For ALL future work on this project:
 
 Violating these rules is considered a critical error.
 
+                                                                          
+  ---------------------------------------                                                                               
+  UPDATED - 9 FEBRUARY 2026 (Session 2)                                                                                 
+  ---------------------------------------                                                                               
+
+  Stage A — Lease Selection Logic (get_governing_lease_for_month)
+
+  Added a centralized, date-based function to determine which lease version governs
+  any given calendar month. This replaces reliance on the is_current flag for
+  month-level queries.
+
+  New functions in app.py:
+
+  1. _parse_month_tuple(date_str)
+     Parses "YYYY-MM-DD" to (year, month) tuple, or None if invalid.
+     Located after get_lease_versions(), before cleanup_draft_leases().
+
+  2. get_governing_lease_for_month(lease_group_id, target_year, target_month)
+     Core Stage A function. For a given lease group and month:
+     - Skips drafts and leases with missing dates
+     - Checks for early termination (Stage B) to compute effective end date
+     - Compares at month level: start_month <= target <= effective_end_month
+     - Tiebreaker: latest start date, then highest version number
+     - Returns {"status": "IN_LEASE", "lease": {...}, "lease_id": ..., "version": ...}
+       or {"status": "OUT_OF_LEASE", "reason": "pre_lease|post_lease|gap|terminated", "lease": None}
+
+     Located after _parse_month_tuple(), before cleanup_draft_leases().
+
+  Stage B — Early Lease Termination (Data Layer Only)
+
+  Added termination event storage. Termination never modifies the original lease —
+  it's a separate append-only record that overrides lease eligibility. The termination
+  month itself is still covered (IN_LEASE); months after it are OUT_OF_LEASE "terminated".
+
+  New file: termination_data.json (runtime data, not tracked in git)
+  Added to .gitignore alongside other runtime data files.
+
+  New functions in app.py (after _save_landlord_review_file, before generate_tenant_token):
+
+  1. _load_all_terminations()
+     Reads termination_data.json. Returns {"terminations": []} if missing/corrupt.
+     Same pattern as _load_all_payments().
+
+  2. _save_termination_file(data)
+     Atomic write (tmp + fsync + rename). Same pattern as _save_payment_file().
+
+  3. get_termination_for_lease(lease_id)
+     Looks up whether a specific lease version has been terminated.
+     Returns the termination event dict, or None.
+
+  Termination event record shape:
+    id, lease_id, termination_date (YYYY-MM-DD), terminated_at (ISO timestamp),
+    terminated_by ("landlord"), note (optional text or null)
+
+  Note: create_termination_event() and termination UI/routes are NOT built yet.
+  Only the storage layer and read functions exist so Stage A can consume them.
+
+  Bug Fixes (this session)
+
+  1. tojson error on tenant submission (tenant_confirm POST paths)
+     monthly_summary was not passed to template in POST render paths.
+     Fixed by adding monthly_summary=[] to both render_error() and success render
+     in tenant_confirm route.
+
+  2. Tenant dashboard not showing "acknowledged" status
+     get_conversation_state() returns {"open": False, "thread": []} for direct
+     acknowledgments (no "flagged" event). The tenant review logic assumed
+     empty visible_events = "submitted". Fixed in TWO places:
+     - Month-level review status: checks convo["open"] instead of just visible_events
+     - Per-category detail: same fix pattern
+
+  3. Missing expected categories invisible on tenant dashboard
+     category_details only built for covered_categories. Missing categories had
+     no entry. Fixed by adding "not_submitted" entries for missing categories
+     with template display: "⏳ [Category] — awaiting submission"
+
+  4. Submission status indicators
+     - Empty box (⬜) changed to orange ❗ for missing/unsubmitted categories
+     - Yellow ❓ added for flagged categories (action_required or you_responded)
+     - Green ✅ retained for covered/acknowledged categories
+
+  5. Duplicate submission causing perpetual "pending_review" for landlord
+     When tenant submitted same category twice, landlord acknowledged one but
+     the unreviewed duplicate dragged category to "pending_review".
+     Fixed with cat_has_any_review pre-check in landlord per-category detail logic.
+
+  6. Clickable month rows on tenant dashboard
+     Clicking a month name prefills the submission form's month/year dropdowns.
+     Three changes:
+     - app.py: reads month/year query params, passes prefill_month/prefill_year to template
+     - Template: month name rendered as <a> link with stopPropagation
+     - Template: <select> options check prefill values for "selected" attribute
+     - Template: DOMContentLoaded script auto-reveals hidden form container and
+       scrolls to it when prefill params are present (form is inside
+       display:none container by default)
+
 ---------------------------------------
 UDATED - 9 FENRUARY 2026
 ---------------------------------------

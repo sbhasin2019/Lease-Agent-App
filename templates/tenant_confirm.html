@@ -176,8 +176,8 @@
                 {% set cat_labels = {'rent': 'Rent', 'maintenance': 'Maintenance', 'utilities': 'Utilities'} %}
                 {% for ms in monthly_summary %}
                 {% if ms.visible %}
-                <tr style="border-bottom: 1px solid #f3f4f6;{% if ms.count > 0 %} cursor: pointer;{% endif %}"{% if ms.count > 0 %} onclick="openTenantSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
-                    <td style="padding: 8px; vertical-align: top;">{{ ms.month_name }} {{ ms.year }}</td>
+                <tr style="border-bottom: 1px solid #f3f4f6; cursor: pointer;"{% if ms.count > 0 %} onclick="openTenantSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
+                    <td style="padding: 8px; vertical-align: top;"><a href="{{ url_for('tenant_page', token=token, month=ms.month, year=ms.year) }}#submit-form" onclick="event.stopPropagation()" style="color: #2563eb; text-decoration: none;">{{ ms.month_name }} {{ ms.year }}</a></td>
 
                     {# ---- Submission Status ---- #}
                     <td style="padding: 8px; vertical-align: top;">
@@ -189,10 +189,12 @@
                             {% for cat in cat_order %}
                                 {% if cat in ms.expected_categories %}
                                 <div style="font-size: 0.85em; line-height: 1.6;">
-                                    {% if cat in (ms.covered_categories or []) %}
+                                    {% if cat in (ms.covered_categories or []) and ms.category_details is mapping and cat in ms.category_details and ms.category_details[cat].state in ('action_required', 'you_responded') %}
+                                    <span style="color: #eab308;">❓</span>
+                                    {% elif cat in (ms.covered_categories or []) %}
                                     <span style="color: #16a34a;">✅</span>
                                     {% else %}
-                                    <span style="color: #d1d5db;">⬜</span>
+                                    <span style="color: #e57c23;">❗</span>
                                     {% endif %}
                                     <span style="color: #555;">{{ cat_labels[cat] }}</span>
                                 </div>
@@ -233,6 +235,8 @@
                                         <span style="color: #1e40af;">🔍</span> <span style="color: #1e40af; font-weight: 600;">{{ cat_labels[cat] }} — submitted{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, awaiting landlord review</span>
                                         {% elif cd.state == 'acknowledged' %}
                                         <span style="color: #16a34a;">✅</span> <span style="color: #16a34a;">{{ cat_labels[cat] }} — acknowledged — no further action required</span>
+                                        {% elif cd.state == 'not_submitted' %}
+                                        <span style="color: #9ca3af;">⏳</span> <span style="color: #9ca3af;">{{ cat_labels[cat] }} — awaiting submission</span>
                                         {% endif %}
                                     </div>
                                     {% endif %}
@@ -282,13 +286,13 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('tenant_confirm', token=token) }}" enctype="multipart/form-data">
+        <form id="submit-form" method="POST" action="{{ url_for('tenant_confirm', token=token) }}" enctype="multipart/form-data">
 
             <label for="period_month">Month</label>
             <select id="period_month" name="period_month" required>
                 <option value="">-- Select --</option>
                 {% for m in range(1, 13) %}
-                <option value="{{ m }}" {% if form and form.get('period_month') == m|string %}selected{% endif %}>
+                <option value="{{ m }}" {% if prefill_month is not none and prefill_month == m %}selected{% elif form and form.get('period_month') == m|string %}selected{% endif %}>
                     {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][m-1] }}
                 </option>
                 {% endfor %}
@@ -299,7 +303,7 @@
                 <option value="">-- Select --</option>
                 {% set current_year = now().year %}
                 {% for y in range(2020, current_year + 2) %}
-                <option value="{{ y }}" {% if form and form.get('period_year') == y|string %}selected{% endif %}>{{ y }}</option>
+                <option value="{{ y }}" {% if prefill_year is not none and prefill_year == y %}selected{% elif form and form.get('period_year') == y|string %}selected{% endif %}>{{ y }}</option>
                 {% endfor %}
             </select>
 
@@ -479,6 +483,19 @@
         document.getElementById(id).style.display = show ? 'block' : 'none';
     }
     </script>
+
+    {% if prefill_month is not none and prefill_year is not none %}
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var formWrapper = document.getElementById("new-submission-form");
+        if (formWrapper) {
+            formWrapper.style.display = "block";
+            formWrapper.scrollIntoView({ behavior: "smooth" });
+        }
+    });
+    </script>
+    {% endif %}
+
     {% endif %}
 
 </div>
