@@ -2592,13 +2592,14 @@
                 <span style="background: #dbeafe; color: #1e40af; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count == 1 else '' }} attention</span>
                 {% endif %}
             </h3>
-            <p style="color: #9ca3af; font-size: 0.82em; margin: 0 0 8px 0;">Click a month to review submissions or respond to tenant messages.</p>
+            <p style="color: #9ca3af; font-size: 0.82em; margin: 0 0 8px 0;">Showing the last 6 months. Older months appear only if they need attention. Click a month to review submissions or respond to tenant messages.</p>
             <div id="monthly-summary-collapsed">
                 <button type="button" onclick="document.getElementById('monthly-summary-collapsed').style.display='none';document.getElementById('monthly-summary-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Show monthly summary</button>
             </div>
             <div id="monthly-summary-full" style="display: none;">
             <style>
                 #monthly-summary tr[onclick]:hover { background: #f9fafb; }
+                @keyframes gentle-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
                 #submissionsModalBody.history-view form,
                 #submissionsModalBody.history-view details { display: none !important; }
             </style>
@@ -2613,34 +2614,89 @@
                 <thead>
                     <tr style="border-bottom: 2px solid #e5e7eb;">
                         <th style="text-align: left; padding: 8px; color: #555;">Month</th>
-                        <th style="text-align: center; padding: 8px; color: #555; width: 80px;">Submissions</th>
-                        <th style="text-align: left; padding: 8px; color: #555;">Review</th>
+                        <th style="text-align: left; padding: 8px; color: #555;">Submission Status</th>
+                        <th style="text-align: left; padding: 8px; color: #555;">Review Status</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {% set cat_order = ['rent', 'maintenance', 'utilities'] %}
+                    {% set cat_labels = {'rent': 'Rent', 'maintenance': 'Maintenance', 'utilities': 'Utilities'} %}
                     {% for ms in monthly_summary %}
+                    {% if ms.visible %}
                     <tr style="border-bottom: 1px solid #f3f4f6;{% if ms.count > 0 %} cursor: pointer;{% endif %}"{% if ms.count > 0 %} onclick="openSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
-                        <td style="padding: 8px;">{{ ms.month_name }} {{ ms.year }}</td>
-                        <td style="padding: 8px; text-align: center; color: #9ca3af;">
-                            {% if ms.count > 0 %}{{ ms.count }}{% else %}—{% endif %}
-                        </td>
-                        <td style="padding: 8px;">
-                            {% if ms.review_status == 'tenant_replied' %}
-                            <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Tenant replied {{ ms.review_date|format_date if ms.review_date else '' }}</span>
-                            {% elif ms.review_status == 'flagged' %}
-                            <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Flagged {{ ms.review_date|format_date if ms.review_date else '' }}</span>
-                            {% elif ms.review_status == 'pending' %}
-                            <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Pending review</span>
-                            {% elif ms.review_status == 'reviewed' %}
-                            <span style="background: #f0fdf4; color: #86efac; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Reviewed</span>
-                            {% else %}
+                        <td style="padding: 8px; vertical-align: top;">{{ ms.month_name }} {{ ms.year }}</td>
+
+                        {# ---- Submission Status ---- #}
+                        <td style="padding: 8px; vertical-align: top;">
+                            {% if ms.expected_categories is none %}
                             <span style="color: #d1d5db;">—</span>
+                            {% elif ms.expected_categories | length == 0 %}
+                            <span style="color: #d1d5db;">—</span>
+                            {% else %}
+                                {% for cat in cat_order %}
+                                    {% if cat in ms.expected_categories %}
+                                    <div style="font-size: 0.85em; line-height: 1.6;">
+                                        {% if cat in (ms.covered_categories or []) %}
+                                        <span style="color: #16a34a;">✅</span>
+                                        {% else %}
+                                        <span style="color: #d1d5db;">⬜</span>
+                                        {% endif %}
+                                        <span style="color: #555;">{{ cat_labels[cat] }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+
+                        {# ---- Review Status ---- #}
+                        <td style="padding: 8px; vertical-align: top;">
+                            {% if ms.category_details is none %}
+                            <span style="color: #d1d5db;">—</span>
+                            {% elif ms.category_details == {} and ms.count == 0 %}
+                            <div style="font-size: 0.85em;">
+                                <span style="color: #7c3aed; font-weight: 700; background: #f3e8ff; padding: 2px 8px; border-radius: 4px; animation: gentle-pulse 2s ease-in-out infinite;">⚠️ No information submitted by tenant</span>
+                            </div>
+                            {% else %}
+                                {% set all_ack = [] %}
+                                {% for cat in cat_order %}
+                                    {% if cat in ms.category_details %}
+                                        {% if ms.category_details[cat].state == 'acknowledged' %}
+                                            {% if all_ack.append(1) %}{% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if all_ack | length == ms.category_details | length and ms.is_complete %}
+                                <span style="font-size: 0.85em; color: #16a34a;">✅ All submitted and acknowledged</span>
+                                {% else %}
+                                    {% for cat in cat_order %}
+                                        {% if cat in ms.category_details %}
+                                        {% set cd = ms.category_details[cat] %}
+                                        <div style="font-size: 0.85em; line-height: 1.6;">
+                                            {% if cd.state == 'tenant_replied' %}
+                                            <span style="color: #1e40af;">💬</span> <span style="color: #1e40af; font-weight: 600;">{{ cat_labels[cat] }} — tenant responded{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, pending your review</span>
+                                            {% elif cd.state == 'flagged' %}
+                                            {% if cd.flag_date and cd.flag_date == cd.date %}
+                                            <span style="color: #92400e;">⚠️</span> <span style="color: #92400e; font-weight: 600;">{{ cat_labels[cat] }} — flag raised by you{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, awaiting tenant response</span>
+                                            {% else %}
+                                            <span style="color: #92400e;">⚠️</span> <span style="color: #92400e; font-weight: 600;">{{ cat_labels[cat] }} — you responded to tenant{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, awaiting tenant response</span>
+                                            {% endif %}
+                                            {% elif cd.state == 'pending_review' %}
+                                            <span style="color: #1e40af;">🔍</span> <span style="color: #1e40af; font-weight: 600;">{{ cat_labels[cat] }} — tenant submitted{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, pending your review</span>
+                                            {% elif cd.state == 'acknowledged' %}
+                                            <span style="color: #16a34a;">✅</span> <span style="color: #16a34a;">{{ cat_labels[cat] }} — acknowledged — no further action required</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
                             {% endif %}
                         </td>
                     </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
+            <p style="color: #aaa; font-size: 0.75em; margin: 6px 0 0 0;">Submissions indicate that the tenant has uploaded documents. They do not confirm payment, accuracy, or landlord approval.</p>
             {% if payment_confirmations %}
             <div style="margin-top: 10px; text-align: center;">
                 <a href="javascript:void(0)" onclick="openFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
@@ -2738,19 +2794,17 @@
                     <div style="margin-bottom: 10px;">
                         <span style="font-size: 0.85em; color: #777;">Review history</span>
                         {% for ev in pc_events %}
-                        <div style="margin-top: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#f9fafb{% endif %}; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85em;{% if ev.event_type in ('acknowledged', 'noted') %} opacity: 0.75;{% endif %}">
+                        <div style="margin-top: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#f9fafb{% endif %}; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85em;{% if ev.event_type in ('acknowledged', 'noted') %} opacity: 0.75;{% endif %}{# noted kept for historical data #}">
                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                 {% if ev.actor == 'tenant' %}
                                 <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Tenant</span>
                                 {% else %}
                                 <span style="background: #f3f4f6; color: #374151; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Landlord</span>
                                 {% endif %}
-                                {% if ev.event_type == 'acknowledged' %}
-                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">{% if convo.thread|length > 0 %}Resolved{% else %}Acknowledged{% endif %}</span>
+                                {% if ev.event_type in ('acknowledged', 'noted') %}
+                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Acknowledged</span>
                                 {% elif ev.event_type == 'flagged' %}
                                 <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Flagged</span>
-                                {% elif ev.event_type == 'noted' %}
-                                <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Noted</span>
                                 {% elif ev.event_type == 'response' %}
                                 <span style="background: #e0e7ff; color: #3730a3; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Reply</span>
                                 {% endif %}
@@ -2792,16 +2846,8 @@
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
                             <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0;">
                                 <input type="hidden" name="review_type" value="acknowledged">
-                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Resolve</button>
+                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge</button>
                             </form>
-                            <details style="margin: 0;">
-                                <summary style="font-size: 0.8em; color: #555; cursor: pointer; padding: 5px 0;">Note &amp; close...</summary>
-                                <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin-top: 6px;">
-                                    <input type="hidden" name="review_type" value="noted">
-                                    <textarea name="internal_note" rows="2" placeholder="Add a closing note (optional)..." style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
-                                    <button type="submit" style="background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer; margin-top: 4px;">Note &amp; close</button>
-                                </form>
-                            </details>
                         </div>
                     </div>
 
@@ -2817,14 +2863,12 @@
                             <div style="margin-bottom: 8px;">
                                 <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Review type</label>
                                 <select name="review_type" required onchange="toggleFlagWarning(this)" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em;">
-                                    <option value="acknowledged">Acknowledged</option>
-                                    <option value="flagged">Flagged</option>
-                                    <option value="noted">Noted</option>
+                                    <option value="acknowledged">Acknowledge</option>
+                                    <option value="flagged">Raise a flag</option>
                                 </select>
                                 <div style="font-size: 0.8em; color: #777; margin-top: 4px; line-height: 1.5;">
-                                    Acknowledged — for your records only<br>
-                                    Noted — private internal note<br>
-                                    Flagged — shown to the tenant (comment required)
+                                    Acknowledge — no further action required<br>
+                                    Raise a flag — shown to the tenant (comment required)
                                 </div>
                             </div>
                             <div style="margin-bottom: 8px;">
@@ -3003,6 +3047,57 @@
             <div class="form-group" style="max-width: 200px;">
                 <label for="rent_due_day">Rent Due Day (1-31)</label>
                 <input type="number" id="rent_due_day" name="rent_due_day" placeholder="1" min="1" max="31" value="{{ cv.rent_due_day or '' }}">
+            </div>
+
+            <!-- Expected Monthly Payments section -->
+            <div class="expected-payments-section" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa;">
+                <h4 style="margin: 0 0 0.25rem 0; font-size: 1rem;">Expected Monthly Payments</h4>
+                <p style="margin: 0 0 1rem 0; color: #666; font-size: 0.85rem;">What payments is the tenant expected to make each month?</p>
+
+                {% if lease_data.needs_expected_payment_confirmation %}
+                <div style="padding: 0.6rem 0.8rem; margin-bottom: 1rem; background: #e8f4fd; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 0.85rem; color: #1e40af;">
+                    This lease was renewed. Please review the expected payment categories below and save to confirm.
+                </div>
+                {% endif %}
+
+                {% set ep = cv.expected_payments if cv.expected_payments else [] %}
+                {% set ep_maintenance = ep | selectattr('type', 'equalto', 'maintenance') | first if ep else none %}
+                {% set ep_utilities = ep | selectattr('type', 'equalto', 'utilities') | first if ep else none %}
+
+                <!-- Rent (always expected, not toggleable) -->
+                <div style="padding: 0.5rem 0; color: #444; font-size: 0.9rem;">
+                    <strong>Rent</strong> — Always expected
+                    {% if cv.monthly_rent %}
+                        <span style="color: #888;">(₹{{ cv.monthly_rent | format_money }}/month)</span>
+                    {% endif %}
+                </div>
+
+                <!-- Maintenance (optional) -->
+                <div style="padding: 0.5rem 0;">
+                    <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+                        <input type="checkbox" name="expect_maintenance" value="1"
+                               onchange="document.getElementById('maintenanceAmountGroup').style.display = this.checked ? 'block' : 'none';"
+                               {% if ep_maintenance and ep_maintenance.expected %}checked{% endif %}>
+                        <strong>Maintenance</strong> — Tenant pays maintenance
+                    </label>
+                    <div id="maintenanceAmountGroup" style="display: {% if ep_maintenance and ep_maintenance.expected %}block{% else %}none{% endif %}; margin: 0.4rem 0 0 1.6rem;">
+                        <label for="maintenance_amount" style="font-size: 0.85rem; color: #555;">Amount (₹)</label>
+                        <input type="number" id="maintenance_amount" name="maintenance_amount" placeholder="Optional" min="0" step="0.01"
+                               value="{{ ep_maintenance.typical_amount if ep_maintenance and ep_maintenance.typical_amount else '' }}"
+                               style="max-width: 180px; display: block; margin-top: 0.2rem;">
+                        <span style="font-size: 0.8rem; color: #888;">If you're unsure or the amount varies significantly, you can leave this blank.</span>
+                    </div>
+                </div>
+
+                <!-- Utilities (optional, no amount) -->
+                <div style="padding: 0.5rem 0;">
+                    <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+                        <input type="checkbox" name="expect_utilities" value="1"
+                               {% if ep_utilities and ep_utilities.expected %}checked{% endif %}>
+                        <strong>Utilities</strong> — Tenant pays utilities
+                    </label>
+                    <span style="margin-left: 1.6rem; font-size: 0.8rem; color: #888; display: block;">Utility amounts change each month, so we just track whether the tenant has submitted proof — no fixed amount needed.</span>
+                </div>
             </div>
 
             <div class="form-buttons">
@@ -4347,6 +4442,103 @@ if (changesModalEl) {
 // SUBMISSIONS MODAL FUNCTIONS
 var submissionsState = { month: null, year: null, monthName: null, viewMode: 'month', origin: 'month' };
 
+var _llMonthData = {{ monthly_summary | tojson }};
+
+function _fmtDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        var dt = new Date(dateStr);
+        if (isNaN(dt.getTime())) return dateStr;
+        var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return dt.getDate() + ' ' + mo[dt.getMonth()] + ' ' + dt.getFullYear();
+    } catch(e) { return dateStr; }
+}
+
+function _buildLandlordOverview(month, year) {
+    var ms = null;
+    for (var i = 0; i < _llMonthData.length; i++) {
+        if (_llMonthData[i].month === month && _llMonthData[i].year === year) { ms = _llMonthData[i]; break; }
+    }
+    if (!ms || ms.expected_categories === null) return '';
+    var CL = {rent:'Rent', maintenance:'Maintenance', utilities:'Utilities'};
+    var CO = ['rent','maintenance','utilities'];
+    var cd = ms.category_details || {};
+    var cdKeys = Object.keys(cd);
+    // All acknowledged + complete → green success
+    if (ms.is_complete && cdKeys.length > 0) {
+        var allAck = true;
+        for (var k = 0; k < cdKeys.length; k++) { if (cd[cdKeys[k]].state !== 'acknowledged') { allAck = false; break; } }
+        if (allAck) {
+            return '<div class="modal-overview" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.9em;">' +
+                '<span style="color:#16a34a;font-weight:600;">\u2705 All expected payments submitted and acknowledged</span></div>';
+        }
+    }
+    var lines = [];
+    // Block 1: Missing
+    var miss = ms.missing_categories || [];
+    for (var i = 0; i < CO.length; i++) {
+        if (miss.indexOf(CO[i]) !== -1) lines.push('<div style="line-height:1.6;color:#9ca3af;">\u2b1c ' + CL[CO[i]] + ' \u2014 not submitted</div>');
+    }
+    // Block 2: Submitted but unresolved
+    for (var i = 0; i < CO.length; i++) {
+        var cat = CO[i];
+        if (!cd[cat] || cd[cat].state === 'acknowledged') continue;
+        var s = cd[cat].state, d = cd[cat].date ? ' on ' + _fmtDate(cd[cat].date) : '';
+        if (s === 'tenant_replied') {
+            lines.push('<div style="line-height:1.6;"><span style="color:#1e40af;">\uD83D\uDCAC</span> <span style="color:#1e40af;font-weight:600;">' + CL[cat] + ' \u2014 tenant responded' + d + ', pending your review</span></div>');
+        } else if (s === 'flagged') {
+            if (cd[cat].flag_date && cd[cat].flag_date === cd[cat].date) {
+                lines.push('<div style="line-height:1.6;"><span style="color:#92400e;">\u26A0\uFE0F</span> <span style="color:#92400e;font-weight:600;">' + CL[cat] + ' \u2014 flag raised by you' + d + ', awaiting tenant response</span></div>');
+            } else {
+                lines.push('<div style="line-height:1.6;"><span style="color:#92400e;">\u26A0\uFE0F</span> <span style="color:#92400e;font-weight:600;">' + CL[cat] + ' \u2014 you responded' + d + ', awaiting tenant response</span></div>');
+            }
+        } else if (s === 'pending_review') {
+            lines.push('<div style="line-height:1.6;"><span style="color:#1e40af;">\uD83D\uDD0D</span> <span style="color:#1e40af;font-weight:600;">' + CL[cat] + ' \u2014 tenant submitted' + d + ', pending your review</span></div>');
+        }
+    }
+    if (lines.length === 0) return '';
+    return '<div class="modal-overview" style="background:#fafafa;border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.9em;">' +
+        '<div style="font-weight:600;margin-bottom:6px;color:#374151;">Payment Overview</div>' + lines.join('') + '</div>';
+}
+
+function _injectLandlordOverview(body, month, year) {
+    var html = _buildLandlordOverview(month, year);
+    if (html) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        body.insertBefore(tmp.firstChild, body.firstChild);
+    }
+    var disc = document.createElement('p');
+    disc.className = 'modal-disclaimer';
+    disc.style.cssText = 'color:#aaa;font-size:0.75em;margin:12px 0 0 0;text-align:center;';
+    disc.textContent = 'Document uploads indicate that a submission was made. They do not confirm payment, accuracy, or landlord approval.';
+    body.appendChild(disc);
+}
+
+function _findLLMonth(month, year) {
+    for (var i = 0; i < _llMonthData.length; i++) {
+        if (_llMonthData[i].month === month && _llMonthData[i].year === year) return _llMonthData[i];
+    }
+    return null;
+}
+
+function _injectLLPartialNotice(body, month, year) {
+    if (!body.querySelector('[data-period-month]')) return;
+    var ms = _findLLMonth(month, year);
+    if (!ms || !ms.missing_categories || ms.missing_categories.length === 0) return;
+    var p = document.createElement('p');
+    p.className = 'modal-partial-notice';
+    p.style.cssText = 'color:#92400e;font-size:0.82em;margin:0 0 10px 0;';
+    p.textContent = 'Some expected payments for this month have not been submitted.';
+    var overview = body.querySelector('.modal-overview');
+    if (overview && overview.nextSibling) {
+        body.insertBefore(p, overview.nextSibling);
+    } else {
+        var firstCard = body.querySelector('[data-period-month]');
+        if (firstCard) body.insertBefore(p, firstCard);
+    }
+}
+
 function openSubmissionsModal(month, year, monthName) {
     submissionsState.month = month;
     submissionsState.year = year;
@@ -4382,9 +4574,13 @@ function openSubmissionsModal(month, year, monthName) {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
-        p.textContent = 'No submissions were made for this month.';
+        p.textContent = 'No submissions have been made for this month yet.';
         body.appendChild(p);
     }
+
+    // Inject payment overview + disclaimer
+    _injectLandlordOverview(body, month, year);
+    _injectLLPartialNotice(body, month, year);
 
     // Set title and button visibility for month view
     title.textContent = 'Submissions for ' + monthName + ' ' + year;
@@ -4506,9 +4702,13 @@ function backToMonthView() {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
-        p.textContent = 'No submissions were made for this month.';
+        p.textContent = 'No submissions have been made for this month yet.';
         body.appendChild(p);
     }
+
+    // Inject payment overview + disclaimer
+    _injectLandlordOverview(body, submissionsState.month, submissionsState.year);
+    _injectLLPartialNotice(body, submissionsState.month, submissionsState.year);
 
     // Restore title and button visibility for month view
     title.textContent = 'Submissions for ' + submissionsState.monthName + ' ' + submissionsState.year;

@@ -49,6 +49,158 @@ For ALL future work on this project:
 
 Violating these rules is considered a critical error.
 
+---------------------------------------
+UDATED - 9 FENRUARY 2026
+---------------------------------------
+
+                                                                                                    
+  ---                                                                                                                   
+  LV-7.2 Steps 5–8 + State Model Cleanup (Session: 9 Feb 2026)
+                                                                                                                        
+  Step 5a — Tenant Monthly Summary Backend (category_details + visibility)                                            
+
+  Added tenant-facing category_details to the tenant monthly summary loop in app.py (lines ~2964–3074). Each month now
+  includes per-category review state using tenant-specific state names:
+
+  - action_required (priority 1) — landlord spoke last, tenant must respond
+  - you_responded (priority 2) — tenant spoke last, waiting for landlord
+  - submitted (priority 3) — no visible events, awaiting landlord review
+  - acknowledged (priority 4) — conversation closed, no action needed
+
+  Key difference from landlord version: uses visible_events filter (event_type in ("flagged", "response")) instead of
+  checking landlord_events. Tenant never sees internal "noted" or "acknowledged" events — only flags and responses.
+
+  Each entry is a dict: {state, date, actor, flag_date} — same shape as landlord.
+
+  Also added visible flag using same 6-month window logic as landlord (using today variable). Last 6 months always
+  visible; older months visible only if missing_categories is non-empty or any category_details.state != "acknowledged".
+
+  Step 5b — Tenant Monthly Summary Template
+
+  Replaced the tenant monthly summary table in tenant_confirm.html. Old table had 3 columns: Month | Submissions (count)
+   | Status (single badge). New table mirrors landlord structure:
+
+  - Column 1: Month — same text and click behaviour
+  - Column 2: Submission Status — per-category ✅/⬜ checkmarks, fixed order: rent → maintenance → utilities
+  - Column 3: Status / Action Required — per-category narrative using tenant state names:
+    - action_required → amber ⚠️ "landlord responded on [date], action required"
+    - you_responded → blue 💬 "you responded on [date], awaiting landlord review"
+    - submitted → blue 🔍 "submitted on [date], awaiting landlord review"
+    - acknowledged → green ✅ "acknowledged — no further action required"
+    - All acknowledged + complete → "All submissions acknowledged"
+    - No submissions → "Awaiting submission"
+
+  Attention badge updated to count months with action_required category states (not old review_status values). Each row
+  wrapped in {% if ms.visible %}. Helper text added: "Showing the last 6 months. Older months appear only if they need
+  attention."
+
+  Step 5c — Tenant Visibility Filtering
+
+  Already completed as part of Step 5b (the {% if ms.visible %} wrapper was included in the template update).
+
+  Step 6 — Monthly Modal Enhancements (Landlord + Tenant)
+
+  Added Payment Overview section at the TOP of per-month modals and a disclaimer at the BOTTOM. Implemented via
+  JavaScript — monthly_summary data serialized as JSON, overview HTML built dynamically each time a modal opens.
+
+  Landlord modal overview (_buildLandlordOverview in index.html):
+  - If all categories acknowledged + complete → green success: "All expected payments submitted and acknowledged"
+  - Otherwise two blocks:
+    - Block 1 (Missing): "⬜ {Category} — not submitted" per missing category
+    - Block 2 (Needs attention): per-category narrative for unresolved states (tenant_replied, flagged, pending_review)
+
+  Tenant modal overview (_buildTenantOverview in tenant_confirm.html):
+  - If all acknowledged + complete → green success: "All submissions acknowledged"
+  - Otherwise two blocks:
+    - Block 1 (Missing): same pattern
+    - Block 2 (Needs action): per-category narrative for action_required, you_responded, submitted
+
+  Disclaimer (both modals, bottom): "Document uploads indicate that a submission was made. They do not confirm payment,
+  accuracy, or landlord approval."
+
+  Overview and disclaimer injected in openSubmissionsModal / openTenantSubmissionsModal and backToMonthView /
+  tenantBackToMonthView. NOT injected in full history view. JS date formatting via _fmtDate() / _fmtDateTenant() helper
+  functions (outputs "D Mon YYYY" to match Python format_date filter).
+
+  Step 7 — UX Polish & Consistency Pass
+
+  Text-only changes, no logic:
+
+  1. Landlord table switched to second-person "you/your" (was third-person "landlord"):
+    - "pending landlord review and action" → "pending your review"
+    - "flag raised by landlord" → "flag raised by you"
+    - "landlord responded to tenant" → "you responded to tenant"
+    - "pending landlord review" → "pending your review"
+  2. Success messages aligned:
+    - Landlord table: "All submitted — no issues" → "All submitted and acknowledged"
+    - Tenant modal: "All submissions received and acknowledged" → "All submissions acknowledged"
+  3. Disclaimers standardised:
+    - Both table disclaimers now include ", or landlord approval" to match modal disclaimer
+
+  Step 8 — Modal Empty & Edge-State Messaging
+
+  Added two helper functions per template for edge cases when opening a per-month modal:
+
+  1. Empty month (no submissions): Updated empty state text
+    - Landlord: "No submissions have been made for this month yet."
+    - Tenant: "You haven't submitted any documents for this month yet."
+  2. Partial submissions (some categories missing): New _injectLLPartialNotice / _injectTenantPartialNotice functions
+    - Landlord: "Some expected payments for this month have not been submitted." (amber text, below overview, above
+  cards)
+    - Tenant: "Some expected documents for this month have not been submitted."
+  3. Current month: No overview, no notices — modal unchanged
+  4. Full history view: No overview, no notices — cards only
+
+  State Model Cleanup — Removed "noted" state
+
+  Simplified landlord review to binary: Acknowledge or Raise a flag. Removed "noted" as a concept.
+
+  Backend (app.py):
+  - Removed "noted" from allowed event types in validation (new submissions cannot use it)
+  - Changed landlord review_status value from "reviewed" to "acknowledged"
+  - Changed tenant review_status value from "resolved" to "acknowledged"
+  - Kept "noted" in conversation close check (line 881) for backward compatibility with historical data
+
+  Landlord template (index.html):
+  - Event timeline: historical "Noted" and "Resolved" badges now display as "Acknowledged"
+  - Open conversation form: removed "Note & close" action; "Resolve" button renamed to "Acknowledge"
+  - Standard review form: dropdown simplified to "Acknowledge" / "Raise a flag"; help text updated
+  - Per-category acknowledged text: "acknowledged — no further action required"
+
+  Tenant template (tenant_confirm.html):
+  - Closed conversation indicator: "This issue has been resolved." → "Acknowledged — no further action required."
+  - Per-category acknowledged text: "acknowledged — no further action required"
+
+  Authoritative State Model (Post-Cleanup)
+
+  Landlord-facing category states:
+  ┌───────────┬────────────────┬──────────────────────────────────────────────┐
+  │ Priority  │     State      │                   Meaning                    │
+  ├───────────┼────────────────┼──────────────────────────────────────────────┤
+  │ 1 (worst) │ tenant_replied │ Tenant responded, pending your review        │
+  ├───────────┼────────────────┼──────────────────────────────────────────────┤
+  │ 2         │ flagged        │ Flag raised by you, awaiting tenant response │
+  ├───────────┼────────────────┼──────────────────────────────────────────────┤
+  │ 3         │ pending_review │ Tenant submitted, pending your review        │
+  ├───────────┼────────────────┼──────────────────────────────────────────────┤
+  │ 4 (best)  │ acknowledged   │ Acknowledged — no further action required    │
+  └───────────┴────────────────┴──────────────────────────────────────────────┘
+  Tenant-facing category states:
+  ┌───────────┬─────────────────┬───────────────────────────────────────────┐
+  │ Priority  │      State      │                  Meaning                  │
+  ├───────────┼─────────────────┼───────────────────────────────────────────┤
+  │ 1 (worst) │ action_required │ Landlord responded, action required       │
+  ├───────────┼─────────────────┼───────────────────────────────────────────┤
+  │ 2         │ you_responded   │ You responded, awaiting landlord review   │
+  ├───────────┼─────────────────┼───────────────────────────────────────────┤
+  │ 3         │ submitted       │ Submitted, awaiting landlord review       │
+  ├───────────┼─────────────────┼───────────────────────────────────────────┤
+  │ 4 (best)  │ acknowledged    │ Acknowledged — no further action required │
+  └───────────┴─────────────────┴───────────────────────────────────────────┘
+  Allowed landlord actions: Acknowledge, Raise a flag (binary only, no "noted").
+
+  Removed concepts: noted, reviewed, resolved — none of these exist as active states. Historical "noted" events are
+  treated as acknowledged.
                                                                                   
   ----------------------------------------------------------------
   UPDATED — 8 FEBRUARY 2026                                                                                             

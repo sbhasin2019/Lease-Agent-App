@@ -1094,6 +1094,43 @@ def _migrate_lease_add_confirmation_flag(lease):
     return True
 
 
+def compute_monthly_coverage(expected_payments, month_payments):
+    """Compute payment category coverage for a single month.
+
+    Args:
+        expected_payments: list of dicts with 'type' and 'expected' keys
+                           (from lease.current_values.expected_payments)
+        month_payments: list of payment confirmation dicts for this month
+
+    Returns:
+        dict with expected, covered, missing categories and summary
+    """
+    expected_categories = [
+        ep["type"] for ep in (expected_payments or [])
+        if ep.get("expected")
+    ]
+
+    covered_set = set(
+        pc.get("confirmation_type")
+        for pc in month_payments
+        if pc.get("confirmation_type") in expected_categories
+    )
+    covered_categories = [cat for cat in expected_categories if cat in covered_set]
+
+    missing_categories = [cat for cat in expected_categories if cat not in covered_set]
+
+    total = len(expected_categories)
+    covered = len(covered_categories)
+
+    return {
+        "expected_categories": expected_categories,
+        "covered_categories": covered_categories,
+        "missing_categories": missing_categories,
+        "coverage_summary": f"{covered} / {total}" if total > 0 else None,
+        "is_complete": total == 0 or covered >= total,
+    }
+
+
 def load_lease_data():
     """Load saved lease data from JSON file if it exists.
 
@@ -1804,7 +1841,7 @@ def index():
                 if count > 0:
                     has_any_event = False
                     all_have_events = True
-                    worst_priority = 4  # reviewed (lowest concern)
+                    worst_priority = 4  # acknowledged (lowest concern)
 
                     for pc in month_payments:
                         pid = pc.get("id")
@@ -1836,8 +1873,84 @@ def index():
                         review_status = "pending"
                         review_date = None
                     else:
-                        review_status = "reviewed"
+                        review_status = "acknowledged"
                         review_date = None
+
+                # Compute coverage (skip current month)
+                if (y, m) == (now.year, now.month):
+                    coverage = {"expected_categories": None, "covered_categories": None,
+                                "missing_categories": None, "coverage_summary": None,
+                                "is_complete": None}
+                else:
+                    coverage = compute_monthly_coverage(
+                        cv.get("expected_payments", []), month_payments)
+
+                # Compute per-category review state (only submitted+expected)
+                if (y, m) == (now.year, now.month):
+                    category_details = None
+                elif count == 0:
+                    category_details = {}
+                else:
+                    category_details = {}
+                    cat_payments = {}
+                    for pc in month_payments:
+                        ctype = pc.get("confirmation_type")
+                        if ctype not in cat_payments:
+                            cat_payments[ctype] = []
+                        cat_payments[ctype].append(pc)
+
+                    for cat in (coverage.get("covered_categories") or []):
+                        cat_pcs = cat_payments.get(cat, [])
+                        if not cat_pcs:
+                            continue
+                        worst = 4  # acknowledged
+                        worst_date = None
+                        worst_actor = None
+                        worst_flag_date = None
+                        for pc in cat_pcs:
+                            pid = pc.get("id")
+                            pc_events = payment_events.get(pid, [])
+                            landlord_events = [e for e in pc_events
+                                               if e.get("actor") == "landlord"]
+                            convo = payment_conversation.get(
+                                pid, {"open": False, "thread": []})
+                            if convo["open"] and convo["thread"]:
+                                last_event = convo["thread"][-1]
+                                flag_event = convo["thread"][0]
+                                if last_event.get("actor") == "tenant":
+                                    if worst > 1:
+                                        worst = 1
+                                        worst_date = last_event.get("created_at")
+                                        worst_actor = "tenant"
+                                        worst_flag_date = flag_event.get("created_at")
+                                else:
+                                    if worst > 2:
+                                        worst = 2
+                                        worst_date = last_event.get("created_at")
+                                        worst_actor = "landlord"
+                                        worst_flag_date = flag_event.get("created_at")
+                            elif not landlord_events:
+                                if worst > 3:
+                                    worst = 3
+                                    worst_actor = "tenant"
+                                    # Use latest submission date for pending_review
+                                    sub_date = pc.get("submitted_at")
+                                    if worst_date is None or (sub_date and sub_date > (worst_date or "")):
+                                        worst_date = sub_date
+                        if worst == 1:
+                            state = "tenant_replied"
+                        elif worst == 2:
+                            state = "flagged"
+                        elif worst == 3:
+                            state = "pending_review"
+                        else:
+                            state = "acknowledged"
+                        category_details[cat] = {
+                            "state": state,
+                            "date": worst_date,
+                            "actor": worst_actor,
+                            "flag_date": worst_flag_date,
+                        }
 
                 monthly_summary.append({
                     "year": y, "month": m,
@@ -1845,6 +1958,8 @@ def index():
                     "count": count,
                     "review_status": review_status,
                     "review_date": review_date,
+                    "category_details": category_details,
+                    **coverage,
                 })
                 m += 1
                 if m > 12:
@@ -1852,6 +1967,28 @@ def index():
                     y += 1
 
             monthly_summary.reverse()
+
+            # Mark visibility: last 6 months always visible,
+            # older months only if they have unresolved issues
+            cutoff_m = now.month - 5
+            cutoff_y = now.year
+            if cutoff_m <= 0:
+                cutoff_m += 12
+                cutoff_y -= 1
+            for ms in monthly_summary:
+                within_window = (ms["year"], ms["month"]) >= (cutoff_y, cutoff_m)
+                if within_window:
+                    ms["visible"] = True
+                else:
+                    has_missing = bool(ms.get("missing_categories"))
+                    has_unresolved = False
+                    cd = ms.get("category_details")
+                    if cd and isinstance(cd, dict):
+                        for cat_info in cd.values():
+                            if isinstance(cat_info, dict) and cat_info.get("state") != "acknowledged":
+                                has_unresolved = True
+                                break
+                    ms["visible"] = has_missing or has_unresolved
 
     return render_template("index.html",
                            uploads=uploads,
@@ -2111,23 +2248,23 @@ def save_lease():
         },
     }
 
-    # Preserve expected_payments from existing lease (not editable via form yet)
-    if lease_id:
-        existing_lease = get_lease_by_id(lease_id)
-        if existing_lease:
-            existing_cv = existing_lease.get("current_values", {})
-            current_values["expected_payments"] = existing_cv.get(
-                "expected_payments",
-                _default_expected_payments(current_values.get("monthly_rent"))
-            )
-        else:
-            current_values["expected_payments"] = _default_expected_payments(
-                current_values.get("monthly_rent")
-            )
-    else:
-        current_values["expected_payments"] = _default_expected_payments(
-            current_values.get("monthly_rent")
+    # Build expected_payments from form inputs
+    monthly_rent_value = current_values.get("monthly_rent")
+
+    maintenance_checked = request.form.get("expect_maintenance") == "1"
+    maintenance_amount = None
+    if maintenance_checked:
+        maintenance_amount = _validate_positive_number(
+            request.form.get("maintenance_amount")
         )
+
+    utilities_checked = request.form.get("expect_utilities") == "1"
+
+    current_values["expected_payments"] = [
+        {"type": "rent", "expected": True, "typical_amount": monthly_rent_value},
+        {"type": "maintenance", "expected": maintenance_checked, "typical_amount": maintenance_amount},
+        {"type": "utilities", "expected": utilities_checked, "typical_amount": None},
+    ]
 
     # Load existing leases
     all_data = _load_all_leases()
@@ -2527,7 +2664,7 @@ def revoke_token_route(lease_group_id):
 def submit_payment_review(lease_group_id, payment_id):
     """Landlord action: add an event for a payment confirmation.
 
-    Supports: flagged, response, acknowledged, noted.
+    Supports: flagged, response, acknowledged.
     Append-only — writes to landlord_review_data.json.
     Never modifies payment_data.json.
     """
@@ -2553,7 +2690,7 @@ def submit_payment_review(lease_group_id, payment_id):
 
     # Validate event_type
     event_type = request.form.get("review_type", "").strip()
-    if event_type not in ("acknowledged", "flagged", "noted", "response"):
+    if event_type not in ("acknowledged", "flagged", "response"):
         flash("Invalid review type.", "error")
         return redirect(url_for("index", lease_id=redirect_lease_id or ""))
 
@@ -2778,7 +2915,7 @@ def tenant_page(token):
 
                 review_status = "not_submitted"
                 if count > 0:
-                    worst_priority = 4  # resolved
+                    worst_priority = 4  # acknowledged
                     for pc in month_payments:
                         pid = pc.get("id")
                         convo = payment_conversation.get(pid, {"open": False, "thread": []})
@@ -2813,13 +2950,99 @@ def tenant_page(token):
                     elif worst_priority == 3:
                         review_status = "submitted"
                     else:
-                        review_status = "resolved"
+                        review_status = "acknowledged"
+
+                # Compute coverage (skip current month)
+                if (y, m) == (today.year, today.month):
+                    coverage = {"expected_categories": None, "covered_categories": None,
+                                "missing_categories": None, "coverage_summary": None,
+                                "is_complete": None}
+                else:
+                    coverage = compute_monthly_coverage(
+                        cv.get("expected_payments", []), month_payments)
+
+                # Compute per-category review state (tenant-facing)
+                if (y, m) == (today.year, today.month):
+                    category_details = None
+                elif count == 0:
+                    category_details = {}
+                else:
+                    category_details = {}
+                    cat_payments = {}
+                    for pc in month_payments:
+                        ctype = pc.get("confirmation_type")
+                        if ctype not in cat_payments:
+                            cat_payments[ctype] = []
+                        cat_payments[ctype].append(pc)
+
+                    for cat in (coverage.get("covered_categories") or []):
+                        cat_pcs = cat_payments.get(cat, [])
+                        if not cat_pcs:
+                            continue
+                        worst = 4  # acknowledged
+                        worst_date = None
+                        worst_actor = None
+                        worst_flag_date = None
+                        for pc in cat_pcs:
+                            pid = pc.get("id")
+                            convo = payment_conversation.get(
+                                pid, {"open": False, "thread": []})
+
+                            # Tenant only sees flagged + response events
+                            visible_events = [e for e in convo.get("thread", [])
+                                              if e.get("event_type") in ("flagged", "response")]
+
+                            if not visible_events:
+                                # No visible events — just submitted, awaiting landlord
+                                if worst > 3:
+                                    worst = 3
+                                    worst_actor = "tenant"
+                                    sub_date = pc.get("submitted_at")
+                                    if worst_date is None or (sub_date and sub_date > (worst_date or "")):
+                                        worst_date = sub_date
+                            elif convo["open"]:
+                                last_visible = visible_events[-1]
+                                flag_event = visible_events[0]
+                                if last_visible.get("actor") == "landlord":
+                                    # Landlord spoke last — tenant must respond
+                                    if worst > 1:
+                                        worst = 1
+                                        worst_date = last_visible.get("created_at")
+                                        worst_actor = "landlord"
+                                        worst_flag_date = flag_event.get("created_at")
+                                else:
+                                    # Tenant spoke last — waiting for landlord
+                                    if worst > 2:
+                                        worst = 2
+                                        worst_date = last_visible.get("created_at")
+                                        worst_actor = "tenant"
+                                        worst_flag_date = flag_event.get("created_at")
+                            else:
+                                # Closed conversation — acknowledged
+                                pass  # worst stays at 4
+
+                        if worst == 1:
+                            state = "action_required"
+                        elif worst == 2:
+                            state = "you_responded"
+                        elif worst == 3:
+                            state = "submitted"
+                        else:
+                            state = "acknowledged"
+                        category_details[cat] = {
+                            "state": state,
+                            "date": worst_date,
+                            "actor": worst_actor,
+                            "flag_date": worst_flag_date,
+                        }
 
                 monthly_summary.append({
                     "year": y, "month": m,
                     "month_name": month_names[m - 1],
                     "count": count,
                     "review_status": review_status,
+                    "category_details": category_details,
+                    **coverage,
                 })
                 m += 1
                 if m > 12:
@@ -2827,6 +3050,28 @@ def tenant_page(token):
                     y += 1
 
             monthly_summary.reverse()
+
+            # Mark visibility: last 6 months always visible,
+            # older months only if they have unresolved issues
+            cutoff_m = today.month - 5
+            cutoff_y = today.year
+            if cutoff_m <= 0:
+                cutoff_m += 12
+                cutoff_y -= 1
+            for ms in monthly_summary:
+                within_window = (ms["year"], ms["month"]) >= (cutoff_y, cutoff_m)
+                if within_window:
+                    ms["visible"] = True
+                else:
+                    has_missing = bool(ms.get("missing_categories"))
+                    has_unresolved = False
+                    cd = ms.get("category_details")
+                    if cd and isinstance(cd, dict):
+                        for cat_info in cd.values():
+                            if isinstance(cat_info, dict) and cat_info.get("state") != "acknowledged":
+                                has_unresolved = True
+                                break
+                    ms["visible"] = has_missing or has_unresolved
         except (ValueError, IndexError):
             pass  # If date parsing fails, skip summary
 

@@ -148,13 +148,18 @@
         <h3 style="font-size: 1.1em; margin-top: 0; margin-bottom: 8px;">Your Monthly Submissions
             {% set ns_attn = namespace(count=0) %}
             {% for ms in monthly_summary %}
-                {% if ms.review_status in ['reply_from_landlord', 'flagged'] %}{% set ns_attn.count = ns_attn.count + 1 %}{% endif %}
+                {% if ms.visible and ms.category_details is mapping %}
+                    {% for cat_key, cat_info in ms.category_details.items() %}
+                        {% if cat_info.state == 'action_required' %}{% set ns_attn.count = ns_attn.count + 1 %}{% endif %}
+                    {% endfor %}
+                {% endif %}
             {% endfor %}
             {% if ns_attn.count > 0 %}
-            <span style="background: #fef3c7; color: #92400e; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count == 1 else '' }} attention</span>
+            <span style="background: #fef3c7; color: #92400e; font-size: 0.65em; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;">{{ ns_attn.count }} need{{ 's' if ns_attn.count != 1 else '' }} attention</span>
             {% endif %}
         </h3>
-        <p style="color: #9ca3af; font-size: 0.82em; margin: 0 0 8px 0;">Click a month to view or respond to messages from your landlord.</p>
+        <p style="color: #9ca3af; font-size: 0.82em; margin: 0 0 4px 0;">Click a month to view or respond to messages from your landlord.</p>
+        <p style="color: #9ca3af; font-size: 0.78em; margin: 0 0 8px 0;">Showing the last 6 months. Older months appear only if they need attention.</p>
         {% set ns_total = namespace(count=0) %}
         {% for ms in monthly_summary %}{% set ns_total.count = ns_total.count + ms.count %}{% endfor %}
         {% if ns_total.count > 0 %}
@@ -162,34 +167,85 @@
             <thead>
                 <tr style="border-bottom: 2px solid #e5e7eb;">
                     <th style="text-align: left; padding: 8px; color: #555;">Month</th>
-                    <th style="text-align: center; padding: 8px; color: #555; width: 80px;">Submissions</th>
-                    <th style="text-align: left; padding: 8px; color: #555;">Status</th>
+                    <th style="text-align: left; padding: 8px; color: #555;">Submission Status</th>
+                    <th style="text-align: left; padding: 8px; color: #555;">Status / Action Required</th>
                 </tr>
             </thead>
             <tbody>
+                {% set cat_order = ['rent', 'maintenance', 'utilities'] %}
+                {% set cat_labels = {'rent': 'Rent', 'maintenance': 'Maintenance', 'utilities': 'Utilities'} %}
                 {% for ms in monthly_summary %}
+                {% if ms.visible %}
                 <tr style="border-bottom: 1px solid #f3f4f6;{% if ms.count > 0 %} cursor: pointer;{% endif %}"{% if ms.count > 0 %} onclick="openTenantSubmissionsModal({{ ms.month }}, {{ ms.year }}, '{{ ms.month_name }}')"{% endif %}>
-                    <td style="padding: 8px;">{{ ms.month_name }} {{ ms.year }}</td>
-                    <td style="padding: 8px; text-align: center; color: #9ca3af;">
-                        {% if ms.count > 0 %}{{ ms.count }}{% else %}—{% endif %}
-                    </td>
-                    <td style="padding: 8px;">
-                        {% if ms.review_status == 'reply_from_landlord' %}
-                        <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Reply from landlord</span>
-                        {% elif ms.review_status == 'flagged' %}
-                        <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; font-weight: 600; padding: 3px 10px; border-radius: 10px;">Action required</span>
-                        {% elif ms.review_status == 'submitted' %}
-                        <span style="background: #f3f4f6; color: #6b7280; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Submitted</span>
-                        {% elif ms.review_status == 'resolved' %}
-                        <span style="background: #f0fdf4; color: #86efac; font-size: 0.8em; padding: 3px 10px; border-radius: 10px;">Resolved</span>
-                        {% else %}
+                    <td style="padding: 8px; vertical-align: top;">{{ ms.month_name }} {{ ms.year }}</td>
+
+                    {# ---- Submission Status ---- #}
+                    <td style="padding: 8px; vertical-align: top;">
+                        {% if ms.expected_categories is none %}
                         <span style="color: #d1d5db;">—</span>
+                        {% elif ms.expected_categories | length == 0 %}
+                        <span style="color: #d1d5db;">—</span>
+                        {% else %}
+                            {% for cat in cat_order %}
+                                {% if cat in ms.expected_categories %}
+                                <div style="font-size: 0.85em; line-height: 1.6;">
+                                    {% if cat in (ms.covered_categories or []) %}
+                                    <span style="color: #16a34a;">✅</span>
+                                    {% else %}
+                                    <span style="color: #d1d5db;">⬜</span>
+                                    {% endif %}
+                                    <span style="color: #555;">{{ cat_labels[cat] }}</span>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </td>
+
+                    {# ---- Status / Action Required ---- #}
+                    <td style="padding: 8px; vertical-align: top;">
+                        {% if ms.category_details is none %}
+                        <span style="color: #d1d5db;">—</span>
+                        {% elif ms.category_details == {} and ms.count == 0 %}
+                        <div style="font-size: 0.85em;">
+                            <span style="color: #9ca3af;">⏳ Awaiting submission</span>
+                        </div>
+                        {% else %}
+                            {% set all_ack = [] %}
+                            {% for cat in cat_order %}
+                                {% if cat in ms.category_details %}
+                                    {% if ms.category_details[cat].state == 'acknowledged' %}
+                                        {% if all_ack.append(1) %}{% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if all_ack | length == ms.category_details | length and ms.is_complete %}
+                            <span style="font-size: 0.85em; color: #16a34a;">✅ All submissions acknowledged</span>
+                            {% else %}
+                                {% for cat in cat_order %}
+                                    {% if cat in ms.category_details %}
+                                    {% set cd = ms.category_details[cat] %}
+                                    <div style="font-size: 0.85em; line-height: 1.6;">
+                                        {% if cd.state == 'action_required' %}
+                                        <span style="color: #92400e;">⚠️</span> <span style="color: #92400e; font-weight: 600;">{{ cat_labels[cat] }} — landlord responded{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, action required</span>
+                                        {% elif cd.state == 'you_responded' %}
+                                        <span style="color: #1e40af;">💬</span> <span style="color: #1e40af; font-weight: 600;">{{ cat_labels[cat] }} — you responded{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, awaiting landlord review</span>
+                                        {% elif cd.state == 'submitted' %}
+                                        <span style="color: #1e40af;">🔍</span> <span style="color: #1e40af; font-weight: 600;">{{ cat_labels[cat] }} — submitted{% if cd.date %} on {{ cd.date | format_date }}{% endif %}, awaiting landlord review</span>
+                                        {% elif cd.state == 'acknowledged' %}
+                                        <span style="color: #16a34a;">✅</span> <span style="color: #16a34a;">{{ cat_labels[cat] }} — acknowledged — no further action required</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
                         {% endif %}
                     </td>
                 </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
+        <p style="color: #aaa; font-size: 0.75em; margin: 6px 0 0 0;">Submissions indicate that you have uploaded documents. They do not confirm payment, accuracy, or landlord approval.</p>
         {% if payment_confirmations %}
         <div style="margin-top: 10px; text-align: center;">
             <a href="javascript:void(0)" onclick="openTenantFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
@@ -408,7 +464,7 @@
                 {% else %}
                 {# ---- Closed indicator ---- #}
                 <div style="margin-top: 6px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 4px; font-size: 0.85em; color: #166534;">
-                    This issue has been resolved.
+                    Acknowledged — no further action required.
                 </div>
                 {% endif %}
             </div>
@@ -447,6 +503,95 @@
 <script>
 var tenantState = { month: null, year: null, monthName: null, viewMode: 'month', origin: 'month' };
 
+var _tenantMonthData = {{ monthly_summary | tojson }};
+
+function _fmtDateTenant(dateStr) {
+    if (!dateStr) return '';
+    try {
+        var dt = new Date(dateStr);
+        if (isNaN(dt.getTime())) return dateStr;
+        var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return dt.getDate() + ' ' + mo[dt.getMonth()] + ' ' + dt.getFullYear();
+    } catch(e) { return dateStr; }
+}
+
+function _buildTenantOverview(month, year) {
+    var ms = null;
+    for (var i = 0; i < _tenantMonthData.length; i++) {
+        if (_tenantMonthData[i].month === month && _tenantMonthData[i].year === year) { ms = _tenantMonthData[i]; break; }
+    }
+    if (!ms || ms.expected_categories === null) return '';
+    var CL = {rent:'Rent', maintenance:'Maintenance', utilities:'Utilities'};
+    var CO = ['rent','maintenance','utilities'];
+    var cd = ms.category_details || {};
+
+    var lines = [];
+    // Block 1: Missing
+    var miss = ms.missing_categories || [];
+    for (var i = 0; i < CO.length; i++) {
+        if (miss.indexOf(CO[i]) !== -1) lines.push('<div style="line-height:1.6;color:#9ca3af;">\u2b1c ' + CL[CO[i]] + ' \u2014 not submitted</div>');
+    }
+    // Block 2: Submitted but unresolved (exclude acknowledged)
+    for (var i = 0; i < CO.length; i++) {
+        var cat = CO[i];
+        if (!cd[cat] || cd[cat].state === 'acknowledged') continue;
+        var s = cd[cat].state, d = cd[cat].date ? ' on ' + _fmtDateTenant(cd[cat].date) : '';
+        if (s === 'action_required') {
+            lines.push('<div style="line-height:1.6;"><span style="color:#92400e;">\u26A0\uFE0F</span> <span style="color:#92400e;font-weight:600;">' + CL[cat] + ' \u2014 landlord responded' + d + ', action required</span></div>');
+        } else if (s === 'you_responded') {
+            lines.push('<div style="line-height:1.6;"><span style="color:#1e40af;">\uD83D\uDCAC</span> <span style="color:#1e40af;font-weight:600;">' + CL[cat] + ' \u2014 you responded' + d + ', awaiting landlord review</span></div>');
+        } else if (s === 'submitted') {
+            lines.push('<div style="line-height:1.6;"><span style="color:#1e40af;">\uD83D\uDD0D</span> <span style="color:#1e40af;font-weight:600;">' + CL[cat] + ' \u2014 submitted' + d + ', awaiting landlord review</span></div>');
+        }
+    }
+    // Both blocks empty → all acknowledged
+    if (lines.length === 0 && ms.is_complete) {
+        return '<div class="modal-overview" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.9em;">' +
+            '<span style="color:#16a34a;font-weight:600;">\u2705 All submissions acknowledged</span></div>';
+    }
+    if (lines.length === 0) return '';
+    return '<div class="modal-overview" style="background:#fafafa;border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.9em;">' +
+        '<div style="font-weight:600;margin-bottom:6px;color:#374151;">Payment Overview</div>' + lines.join('') + '</div>';
+}
+
+function _injectTenantOverview(body, month, year) {
+    var html = _buildTenantOverview(month, year);
+    if (html) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        body.insertBefore(tmp.firstChild, body.firstChild);
+    }
+    var disc = document.createElement('p');
+    disc.className = 'modal-disclaimer';
+    disc.style.cssText = 'color:#aaa;font-size:0.75em;margin:12px 0 0 0;text-align:center;';
+    disc.textContent = 'Document uploads indicate that a submission was made. They do not confirm payment, accuracy, or landlord approval.';
+    body.appendChild(disc);
+}
+
+function _findTenantMonth(month, year) {
+    for (var i = 0; i < _tenantMonthData.length; i++) {
+        if (_tenantMonthData[i].month === month && _tenantMonthData[i].year === year) return _tenantMonthData[i];
+    }
+    return null;
+}
+
+function _injectTenantPartialNotice(body, month, year) {
+    if (!body.querySelector('[data-period-month]')) return;
+    var ms = _findTenantMonth(month, year);
+    if (!ms || !ms.missing_categories || ms.missing_categories.length === 0) return;
+    var p = document.createElement('p');
+    p.className = 'modal-partial-notice';
+    p.style.cssText = 'color:#92400e;font-size:0.82em;margin:0 0 10px 0;';
+    p.textContent = 'Some expected documents for this month have not been submitted.';
+    var overview = body.querySelector('.modal-overview');
+    if (overview && overview.nextSibling) {
+        body.insertBefore(p, overview.nextSibling);
+    } else {
+        var firstCard = body.querySelector('[data-period-month]');
+        if (firstCard) body.insertBefore(p, firstCard);
+    }
+}
+
 function openTenantSubmissionsModal(month, year, monthName) {
     tenantState.month = month;
     tenantState.year = year;
@@ -482,9 +627,13 @@ function openTenantSubmissionsModal(month, year, monthName) {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
-        p.textContent = 'No submissions were made for this month.';
+        p.textContent = 'You haven\'t submitted any documents for this month yet.';
         body.appendChild(p);
     }
+
+    // Inject payment overview + disclaimer
+    _injectTenantOverview(body, month, year);
+    _injectTenantPartialNotice(body, month, year);
 
     // Set title and button visibility for month view
     title.textContent = 'Submissions for ' + monthName + ' ' + year;
@@ -606,9 +755,13 @@ function tenantBackToMonthView() {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
-        p.textContent = 'No submissions were made for this month.';
+        p.textContent = 'You haven\'t submitted any documents for this month yet.';
         body.appendChild(p);
     }
+
+    // Inject payment overview + disclaimer
+    _injectTenantOverview(body, tenantState.month, tenantState.year);
+    _injectTenantPartialNotice(body, tenantState.month, tenantState.year);
 
     // Restore month view
     title.textContent = 'Submissions for ' + tenantState.monthName + ' ' + tenantState.year;
