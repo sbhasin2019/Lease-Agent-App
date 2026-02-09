@@ -4442,7 +4442,7 @@ if (changesModalEl) {
 // SUBMISSIONS MODAL FUNCTIONS
 var submissionsState = { month: null, year: null, monthName: null, viewMode: 'month', origin: 'month' };
 
-var _llMonthData = {{ monthly_summary | tojson }};
+var _llMonthData = {{ monthly_summary | default([], true) | tojson }};
 
 function _fmtDate(dateStr) {
     if (!dateStr) return '';
