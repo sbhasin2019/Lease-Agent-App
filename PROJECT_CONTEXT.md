@@ -49,7 +49,143 @@ For ALL future work on this project:
 
 Violating these rules is considered a critical error.
 
-                                                                          
+------------------------------------------
+UPDATED - 10 FEBRUARY 
+------------------------------------------
+                      
+                                                             
+  ────────────────────────────────────────────────────────
+  COMPLETED: DASHBOARD PHASE 1 — CARD REDESIGN (2026-02-10)                                                             
+  ────────────────────────────────────────────────────────
+
+  STATUS: Implemented and verified.
+
+  ────────────────────────────────────────────────────────
+  WHAT WAS DONE
+  ────────────────────────────────────────────────────────
+
+  1. BACKEND HELPERS (app.py)
+
+     _normalize_name(name)
+     - Module-level helper (extracted from group_leases_by_lessor)
+     - Returns (display_name, key) tuple
+     - Strips titles: Prof, Mr, Mrs, Ms, Dr (case-insensitive)
+     - Used by both landlord grouping and tenant continuity comparison
+
+     get_earliest_start_date(versions)
+     - Pure function, accepts pre-loaded versions list
+     - Returns earliest lease_start_date (YYYY-MM-DD) across all versions
+     - Does NOT reload JSON
+
+     get_tenant_continuity_duration(versions, current_tenant_name)
+     - Pure function, accepts pre-loaded versions list
+     - Defensively sorts versions newest-first by version number
+     - Walks newest → oldest, stops at first tenant name mismatch
+     - Uses _normalize_name for comparison (survives title variations)
+     - Returns formatted string: "1y 5m", "1y", "5m", "< 1m", or None
+     - Does NOT reload JSON
+
+  2. DASHBOARD ROUTE ENRICHMENT
+
+     The dashboard route (index "/") now:
+     - Creates a versions_cache dict (keyed by lease_group_id)
+     - Calls get_lease_versions at most ONCE per unique lease_group_id
+     - Attaches computed view-model keys to each lease dict BEFORE grouping:
+       - lease["_earliest_start_date"]  → ISO date string or None
+       - lease["_tenant_continuity"]    → formatted duration string or None
+       - lease["_needs_attention"]      → False (placeholder, no logic yet)
+
+  3. DASHBOARD CARD REDESIGN (template + CSS)
+
+     Card layout is now:
+
+     ┌─────────────────────────────────────────────┐
+     │ Lease Nickname                               │
+     │ Lease started on 16 Sep 2024                 │
+     │                                              │
+     │ Aditya Narula       DAYS UNTIL EXPIRY        │
+     │ Tenant for 1y 4m          155                │
+     │                     (Ends 15 Jul 2026)       │
+     │                                              │
+     │ Monthly rent: ₹197,950                       │
+     │                                              │
+     │ [ View Lease ]                               │
+     └─────────────────────────────────────────────┘
+
+     Expired leases show:
+     - "Days past expiry" (label)
+     - Absolute value (number)
+     - "(Ended <date>)" (subtext)
+
+     REMOVED from cards:
+     - "Added on" row
+     - Raw "End Date" row
+     - Large urgency blocks (positive/warning/critical/expired)
+     - Left-border urgency colour accents
+     - Delete button
+     - Fixed min-height (220px)
+
+     RETAINED:
+     - Monthly rent (deep green, semi-bold, monospace numerals)
+     - View Lease button
+
+     Monthly rent styling:
+     - Label: 12px muted gray (#6b7280)
+     - Amount: 14px semi-bold, deep green (#1a6b4a), monospace
+     - Positioned as calm secondary signal, not dominant
+
+  ────────────────────────────────────────────────────────
+  WHAT EXISTS BUT IS NOT YET ACTIVE
+  ────────────────────────────────────────────────────────
+
+  - lease["_needs_attention"] is always False (placeholder)
+  - No attention badge HTML/CSS yet
+  - No renewal prompt or modal
+  - No dashboard_prefs.json file
+  - No drag-and-drop or grouping
+
+  ────────────────────────────────────────────────────────
+  CONSTRAINTS FOR FUTURE WORK
+  ────────────────────────────────────────────────────────
+
+  - _normalize_name is the SINGLE source of truth for name comparison
+    (landlord grouping AND tenant continuity both use it)
+  - Helpers must NEVER reload JSON — always accept pre-loaded data
+  - Dashboard route must use versions_cache pattern for any new
+    per-lease-group computation
+  - Template must NOT compute business logic — all derived values
+    are attached in the route via underscore-prefixed keys (e.g. _earliest_start_date)
+  - Card CSS classes are scoped to dashboard cards only
+    (prefixed with .lease-card-)
+
+  ────────────────────────────────────────────────────────
+  FILES MODIFIED
+  ────────────────────────────────────────────────────────
+
+  app.py:
+  - Line 9: added import re
+  - Lines 1562–1576: _normalize_name (new module-level helper)
+  - Lines 1579–1616: group_leases_by_lessor (updated to use _normalize_name)
+  - Lines 1278–1355: get_earliest_start_date + get_tenant_continuity_duration
+  - Lines 2004–2020: dashboard route enrichment with versions_cache
+
+  templates/index.html:
+  - Card CSS: replaced meta/urgency/border styles with body/tenant/expiry/rent styles
+  - Card HTML: replaced meta rows + urgency block with two-column body layout
+  - Removed .btn-delete-lease CSS and Delete button HTML
+  - Reduced card padding (20px → 16px) and button padding
+
+  ────────────────────────────────────────────────────────
+  REMAINING DASHBOARD PHASES (NOT YET STARTED)
+  ────────────────────────────────────────────────────────
+
+  In order:
+  1. Define dashboard_prefs.json schema
+  2. Drag-and-drop card reordering (SortableJS via CDN) + persistence
+  3. Card grouping (folder-style group cards) + persistence
+  4. Attention badge (visual + trigger logic)
+  5. Renewal confirmation prompt (modal + suppression via dashboard_prefs.json)
+                                                    
   ---------------------------------------                                                                               
   UPDATED - 9 FEBRUARY 2026 (Session 2)                                                                                 
   ---------------------------------------                                                                               

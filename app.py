@@ -6,6 +6,7 @@ A simple local web app to extract and display lease information.
 import os
 import json
 from datetime import datetime
+import re
 import calendar
 import uuid
 import secrets
@@ -1274,6 +1275,86 @@ def get_lease_versions(lease_group_id):
     return sorted(versions, key=lambda x: x.get("version", 1), reverse=True)
 
 
+def get_earliest_start_date(versions):
+    """Get the earliest lease_start_date across all versions in a lease group.
+
+    Args:
+        versions: List of lease version dicts (pre-loaded, not re-fetched).
+
+    Returns:
+        str: ISO date string (YYYY-MM-DD) of the earliest start, or None.
+    """
+    earliest = None
+    for v in versions:
+        cv = v.get("current_values", v)
+        start_str = cv.get("lease_start_date")
+        if start_str:
+            try:
+                d = datetime.strptime(start_str, "%Y-%m-%d").date()
+                if earliest is None or d < earliest:
+                    earliest = d
+            except (ValueError, TypeError):
+                pass
+    return earliest.isoformat() if earliest else None
+
+
+def get_tenant_continuity_duration(versions, current_tenant_name):
+    """Compute how long the current tenant has continuously held the lease.
+
+    Walks versions from newest to oldest. Finds the earliest contiguous
+    version where the tenant name matches (after title normalization via
+    _normalize_name). Duration is from that version's start date to today.
+
+    Args:
+        versions: List of lease version dicts (pre-loaded, not re-fetched).
+                  Will be defensively sorted newest-first by version number.
+        current_tenant_name: The current tenant's name string.
+
+    Returns:
+        str: Formatted duration like "1y 5m", "1y", "5m", or "< 1m".
+             None if tenant name is empty or continuity cannot be determined.
+    """
+    if not current_tenant_name:
+        return None
+    _, current_key = _normalize_name(current_tenant_name)
+    if not current_key:
+        return None
+    # Defensive sort: newest first by version number
+    sorted_versions = sorted(versions, key=lambda x: x.get("version", 1), reverse=True)
+    continuity_start = None
+    for v in sorted_versions:
+        cv = v.get("current_values", v)
+        _, tenant_key = _normalize_name(cv.get("lessee_name"))
+        if tenant_key == current_key:
+            start_str = cv.get("lease_start_date")
+            if start_str:
+                continuity_start = start_str
+        else:
+            break
+    if not continuity_start:
+        return None
+    try:
+        start = datetime.strptime(continuity_start, "%Y-%m-%d").date()
+        today = datetime.now().date()
+        years = today.year - start.year
+        months = today.month - start.month
+        if today.day < start.day:
+            months -= 1
+        if months < 0:
+            years -= 1
+            months += 12
+        if years > 0 and months > 0:
+            return f"{years}y {months}m"
+        elif years > 0:
+            return f"{years}y"
+        elif months > 0:
+            return f"{months}m"
+        else:
+            return "< 1m"
+    except (ValueError, TypeError):
+        return None
+
+
 def _parse_month_tuple(date_str):
     """Parse 'YYYY-MM-DD' string to (year, month) tuple.
 
@@ -1558,6 +1639,23 @@ def get_active_lease():
     return leases[0] if leases else None
 
 
+def _normalize_name(name):
+    """Remove common titles from a name and normalize for comparison.
+
+    Returns:
+        tuple: (display_name, key) where display_name is title-cased
+               and key is lowercased for comparison. Both are None if
+               name is empty/whitespace.
+    """
+    if not name:
+        return None, None
+    cleaned = re.sub(r'^(prof\.?|mrs\.?|mr\.?|ms\.?|dr\.?)\s*', '', name.strip(), flags=re.IGNORECASE)
+    cleaned = ' '.join(cleaned.split())
+    if not cleaned:
+        return None, None
+    return cleaned.title(), cleaned.lower()
+
+
 def group_leases_by_lessor(leases):
     """Group leases by lessor_name for dashboard display.
 
@@ -1566,23 +1664,6 @@ def group_leases_by_lessor(leases):
                      with "Unknown Landlord" at the end if present.
     """
     from collections import OrderedDict
-    import re
-
-    def remove_titles(name):
-        """Remove common titles from name and title-case the result."""
-        if not name:
-            return None
-        # Remove common titles - order from longest to shortest to avoid partial matches
-        cleaned = re.sub(r'^(prof\.?|mrs\.?|mr\.?|ms\.?|dr\.?)\s*', '', name.strip(), flags=re.IGNORECASE)
-        # Collapse multiple spaces and strip
-        cleaned = ' '.join(cleaned.split())
-        # Title case: first letter of each word capitalized
-        return cleaned.title() if cleaned else None
-
-    def normalize_key(name):
-        """Normalize name for grouping: lowercase version of cleaned name."""
-        cleaned = remove_titles(name)
-        return cleaned.lower() if cleaned else None
 
     groups = {}  # lessor_key -> {"display_name": str, "leases": []}
 
@@ -1591,11 +1672,13 @@ def group_leases_by_lessor(leases):
         cv = lease.get("current_values") or lease
         raw_lessor = cv.get("lessor_name")
         if not raw_lessor or not raw_lessor.strip():
-            lessor_key = "Unknown Landlord"
+            lessor_key = "unknown landlord"
             display_name = "Unknown Landlord"
         else:
-            display_name = remove_titles(raw_lessor) or "Unknown Landlord"
-            lessor_key = display_name.lower()
+            display_name, lessor_key = _normalize_name(raw_lessor)
+            if not display_name:
+                display_name = "Unknown Landlord"
+                lessor_key = "unknown landlord"
 
         if lessor_key not in groups:
             groups[lessor_key] = {"display_name": display_name, "leases": []}
@@ -1603,10 +1686,10 @@ def group_leases_by_lessor(leases):
 
     # Sort groups alphabetically, but put "Unknown Landlord" at the end
     sorted_keys = sorted(
-        [k for k in groups.keys() if k != "Unknown Landlord"]
+        [k for k in groups.keys() if k != "unknown landlord"]
     )
-    if "Unknown Landlord" in groups:
-        sorted_keys.append("Unknown Landlord")
+    if "unknown landlord" in groups:
+        sorted_keys.append("unknown landlord")
 
     return OrderedDict(
         (groups[k]["display_name"], groups[k]["leases"]) for k in sorted_keys
@@ -1921,6 +2004,21 @@ def index():
     if not lease_id and not new_lease:
         # Dashboard shows only current versions (not old renewals)
         leases = get_all_leases(current_only=True)
+
+        # Pre-compute card view-model data for each lease.
+        # versions_cache ensures get_lease_versions is called at most
+        # once per lease_group_id, avoiding repeated JSON file reads.
+        versions_cache = {}
+        for lease in leases:
+            cv = lease.get("current_values", lease)
+            lgid = lease.get("lease_group_id", lease.get("id"))
+            if lgid not in versions_cache:
+                versions_cache[lgid] = get_lease_versions(lgid)
+            versions = versions_cache[lgid]
+            lease["_earliest_start_date"] = get_earliest_start_date(versions)
+            lease["_tenant_continuity"] = get_tenant_continuity_duration(versions, cv.get("lessee_name"))
+            lease["_needs_attention"] = False  # placeholder for future attention badge
+
         grouped_leases = group_leases_by_lessor(leases)
         global_alerts = get_global_alerts(leases)
         return render_template("index.html",
