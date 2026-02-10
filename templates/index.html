@@ -1807,6 +1807,7 @@
             }
         }
         .lease-card {
+            position: relative;
             background: #fff;
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
@@ -2065,6 +2066,178 @@
             line-height: 1.3;
             margin-bottom: 2px;
         }
+        .lease-card-attention {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.3;
+            letter-spacing: 0.02em;
+            color: #6b7280;
+            text-decoration: none;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .lease-card-attention:hover {
+            text-decoration: underline;
+        }
+        .lease-card-attention-icon {
+            display: inline-block;
+            animation: attention-wave 1.5s ease-in-out infinite;
+        }
+        .lease-card:hover .lease-card-attention-icon {
+            animation-play-state: paused;
+        }
+        @keyframes attention-wave {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        /* Payment thread blocks (grouped category view) */
+        .payment-thread {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin-bottom: 12px;
+        }
+        .payment-thread-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .payment-thread-type {
+            font-weight: 600;
+            font-size: 1em;
+            color: #1f2937;
+        }
+        .payment-thread-status {
+            font-size: 0.82em;
+            font-weight: 500;
+            color: #6b7280;
+        }
+        .payment-thread-timeline {
+            margin: 0;
+            padding: 0 0 0 6px;
+            list-style: none;
+        }
+        .timeline-entry {
+            padding: 4px 0;
+            font-size: 0.9em;
+            color: #374151;
+            line-height: 1.5;
+        }
+        .timeline-entry::before {
+            content: "\2022";
+            margin-right: 8px;
+            color: #9ca3af;
+        }
+        .timeline-entry-earlier {
+            color: #9ca3af;
+        }
+        .timeline-entry-label {
+            font-size: 0.75em;
+            font-weight: 500;
+            color: #9ca3af;
+            margin-left: 4px;
+        }
+        .timeline-entry-date {
+            color: #9ca3af;
+            font-size: 0.88em;
+        }
+        .timeline-entry-message {
+            display: block;
+            color: #6b7280;
+            font-style: italic;
+            margin-left: 22px;
+            font-size: 0.92em;
+        }
+
+        /* Compact reply / note boxes — global */
+        textarea.reply-box {
+            height: 26px !important;
+            min-height: 26px !important;
+            max-height: 52px !important;
+            line-height: 18px !important;
+            font-size: 13px !important;
+            padding: 3px 6px !important;
+            box-sizing: border-box !important;
+            resize: vertical;
+            overflow-y: auto;
+        }
+
+        /* Attention Overview Modal */
+        .attention-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .attention-modal {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px 32px;
+            max-width: 480px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }
+        .attention-modal-close {
+            position: absolute;
+            top: 12px; right: 16px;
+            background: none; border: none;
+            font-size: 22px; color: #9ca3af;
+            cursor: pointer; line-height: 1;
+        }
+        .attention-modal-close:hover { color: #374151; }
+        .attention-modal-header h3 {
+            font-size: 1.1em; margin: 0 0 2px 0; color: #1a1a2e;
+        }
+        .attention-modal-header p {
+            font-size: 0.85em; color: #9ca3af; margin: 0 0 20px 0;
+        }
+        .attention-section { margin-bottom: 20px; }
+        .attention-section:last-child { margin-bottom: 0; }
+        .attention-section h4 {
+            font-size: 0.8em; text-transform: uppercase;
+            letter-spacing: 0.04em; color: #6b7280;
+            margin: 0 0 10px 0; padding-bottom: 6px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .attention-list {
+            list-style: none; margin: 0; padding: 0;
+        }
+        .attention-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f9fafb;
+        }
+        .attention-item:last-child { border-bottom: none; }
+        .attention-item-month {
+            font-size: 0.9em; font-weight: 500; color: #374151;
+            min-width: 120px;
+        }
+        .attention-item-reason {
+            font-size: 0.82em; color: #9ca3af; flex: 1;
+        }
+        .attention-item-view {
+            font-size: 0.82em; color: #2563eb;
+            text-decoration: none; font-weight: 500;
+        }
+        .attention-item-view:hover { text-decoration: underline; }
+        .attention-empty {
+            font-size: 0.85em; color: #d1d5db;
+            margin: 0; padding: 4px 0;
+        }
+
         .lease-card-subtitle {
             font-size: 12px;
             color: #9ca3af;
@@ -2295,6 +2468,7 @@
                 {% set lcv = lease.current_values if lease.current_values else lease %}
                 {% set days_remaining = lcv.lease_end_date | days_until %}
                 <div class="lease-card">
+                    {% if lease._attention_count %}<button type="button" onclick="openAttentionModal('{{ lease.id }}')" class="lease-card-attention" aria-label="View months needing attention for {{ lcv.lease_nickname or 'this lease' }}"><span class="lease-card-attention-icon">🙋🏻</span> Needs attention</button>{% endif %}
                     <div class="lease-card-content">
                         <div class="lease-card-title">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
                         <div class="lease-card-subtitle">{% if lease._earliest_start_date %}Lease started on {{ lease._earliest_start_date | format_date }}{% else %}Start date unknown{% endif %}</div>
@@ -2321,6 +2495,37 @@
                         <a href="/?lease_id={{ lease.id }}" class="btn-view-lease">View Lease</a>
                     </div>
                 </div>
+                {% if lease._attention_count %}
+                <div id="attention-modal-{{ lease.id }}" class="attention-modal-overlay" style="display:none;">
+                    <div class="attention-modal">
+                        <button type="button" class="attention-modal-close" onclick="closeAttentionModal('{{ lease.id }}')">&times;</button>
+                        <div class="attention-modal-header">
+                            <h3>{{ lcv.lease_nickname or 'Untitled Lease' }}</h3>
+                            <p>These items need your attention</p>
+                        </div>
+                        <div class="attention-section">
+                            <h4>Payments needing attention</h4>
+                            {% if lease._attention_items %}
+                            <ul class="attention-list">
+                                {% for item in lease._attention_items %}
+                                <li class="attention-item">
+                                    <span class="attention-item-month">{{ item.month_name }} {{ item.year }}</span>
+                                    <span class="attention-item-reason">{{ item.reason }}</span>
+                                    <a href="/?lease_id={{ lease.id }}&open_month={{ item.year }}-{{ '%02d' | format(item.month) }}&return_to=attention" class="attention-item-view">View</a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="attention-empty">No payment issues right now</p>
+                            {% endif %}
+                        </div>
+                        <div class="attention-section">
+                            <h4>Questions &amp; decisions</h4>
+                            <p class="attention-empty">Nothing else right now</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -2333,6 +2538,27 @@
             <a href="/?new=true" class="btn-upload-new">+ Upload Your First Lease</a>
         </div>
         {% endif %}
+
+        <script>
+        function openAttentionModal(leaseId) {
+            var modal = document.getElementById('attention-modal-' + leaseId);
+            if (modal) modal.style.display = 'flex';
+        }
+        function closeAttentionModal(leaseId) {
+            var modal = document.getElementById('attention-modal-' + leaseId);
+            if (modal) modal.style.display = 'none';
+        }
+        document.addEventListener('click', function (e) {
+            if (e.target.classList.contains('attention-modal-overlay')) {
+                e.target.style.display = 'none';
+            }
+        });
+        {% if return_attention_for %}
+        document.addEventListener('DOMContentLoaded', function () {
+            openAttentionModal('{{ return_attention_for }}');
+        });
+        {% endif %}
+        </script>
     </div>
 
     {% elif lease_data and not edit_mode %}
@@ -2799,25 +3025,29 @@
                     {% if convo.open %}
                     {# ---- CONVERSATION OPEN: Reply + Close actions ---- #}
                     <div style="margin-top: 8px;">
-                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-bottom: 10px;">
+                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-bottom: 0;">
                             <input type="hidden" name="review_type" value="response">
-                            <div style="margin-bottom: 6px;">
-                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Reply to tenant</label>
-                                <textarea name="internal_note" rows="2" placeholder="Type your reply..." required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                            <div style="margin-bottom: 4px;">
+                                <label style="font-size: 0.8em; color: #555; margin-bottom: 2px; display: block;">Reply to tenant</label>
+                                <textarea name="internal_note" rows="1" class="reply-box" placeholder="Type your reply..." required style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
                             </div>
-                            <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 4px;">
                                 <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
                                 <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
                             </div>
                             <button type="submit" style="background: #2563eb; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Send reply</button>
                         </form>
 
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                            <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0;">
-                                <input type="hidden" name="review_type" value="acknowledged">
-                                <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge</button>
-                            </form>
+                        <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0 4px 0;">
+                            <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                            <span style="font-size: 0.75em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em;">or</span>
+                            <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
                         </div>
+
+                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0; text-align: center;">
+                            <input type="hidden" name="review_type" value="acknowledged">
+                            <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge &mdash; no further action needed</button>
+                        </form>
                     </div>
 
                     {% else %}
@@ -2840,9 +3070,9 @@
                                     Raise a flag — shown to the tenant (comment required)
                                 </div>
                             </div>
-                            <div style="margin-bottom: 8px;">
-                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Note</label>
-                                <textarea name="internal_note" rows="2" placeholder="Add a note..." style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
+                            <div style="margin-bottom: 4px;">
+                                <label style="font-size: 0.8em; color: #555; margin-bottom: 2px; display: block;">Note</label>
+                                <textarea name="internal_note" rows="1" class="reply-box" placeholder="Add a note..." style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
                                 <span class="flag-warning" style="display: none; font-size: 0.8em; color: #92400e; margin-top: 4px;">This message will be shown to the tenant.</span>
                             </div>
                             <div style="margin-bottom: 8px;">
@@ -2860,6 +3090,104 @@
                 {% endfor %}
             {% else %}
                 <p style="color: #999; font-size: 0.9em; font-style: italic;">No payment submissions have been recorded yet.</p>
+            {% endif %}
+        </div>
+
+        {# ---- PAYMENT THREAD VIEW (grouped by category, display-only) ---- #}
+        <div id="payment-thread-view" style="display: none;">
+            {% if monthly_summary is defined and payment_threads_by_month is defined %}
+                {% for ms in monthly_summary %}
+                    {% if ms.count > 0 %}
+                        {% set threads = payment_threads_by_month.get((ms.year, ms.month), []) %}
+                        {% for thread in threads %}
+                        <div class="payment-thread"
+                             data-thread-month="{{ ms.month }}"
+                             data-thread-year="{{ ms.year }}">
+                            <div class="payment-thread-header">
+                                <span class="payment-thread-type">{{ thread.payment_type_display }}</span>
+                                <span class="payment-thread-status">{{ thread.status_display }}</span>
+                            </div>
+                            <ul class="payment-thread-timeline">
+                                {% for entry in thread.timeline %}
+                                <li class="timeline-entry{% if entry.entry_type == 'submission' and not entry.is_latest %} timeline-entry-earlier{% endif %}">
+                                    {% if entry.entry_type == 'submission' %}
+                                        Tenant submitted ₹{{ entry.amount_declared|format_money }}
+                                        <span class="timeline-entry-date">on {{ entry.timestamp|format_date }}</span>
+                                        {% if entry.is_latest and thread.submission_count > 1 %}
+                                            <span class="timeline-entry-label">Latest</span>
+                                        {% elif not entry.is_latest %}
+                                            <span class="timeline-entry-label">Earlier submission</span>
+                                        {% endif %}
+                                    {% elif entry.entry_type == 'event' %}
+                                        {% if entry.event_type == 'acknowledged' %}
+                                            Landlord acknowledged
+                                        {% elif entry.event_type == 'flagged' %}
+                                            Landlord flagged
+                                        {% elif entry.event_type == 'response' and entry.actor == 'tenant' %}
+                                            Tenant replied
+                                        {% elif entry.event_type == 'response' and entry.actor == 'landlord' %}
+                                            Landlord replied
+                                        {% endif %}
+                                        <span class="timeline-entry-date">on {{ entry.timestamp|format_date }}</span>
+                                        {% if entry.message %}
+                                            <span class="timeline-entry-message">"{{ entry.message }}"</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% if thread.status != 'resolved' %}
+                            <div class="thread-actions" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                {% if thread.conversation_open %}
+                                {# CASE A: Open conversation — Reply + Acknowledge #}
+                                <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=lease_data.lease_group_id, payment_id=thread.action_payment_id) }}" enctype="multipart/form-data" style="margin-bottom: 0;">
+                                    <input type="hidden" name="review_type" value="response">
+                                    <label style="font-size: 0.8em; color: #555; margin-bottom: 2px; display: block;">Reply to tenant</label>
+                                    <textarea name="internal_note" rows="1" class="reply-box" placeholder="Type your reply..." required style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 4px;"></textarea>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.8em;">
+                                        <button type="submit" style="padding: 6px 14px; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Send reply</button>
+                                    </div>
+                                </form>
+
+                                <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0 4px 0;">
+                                    <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                                    <span style="font-size: 0.75em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em;">or</span>
+                                    <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+                                </div>
+
+                                <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=lease_data.lease_group_id, payment_id=thread.action_payment_id) }}" style="margin: 0; text-align: center;">
+                                    <input type="hidden" name="review_type" value="acknowledged">
+                                    <button type="submit" style="padding: 5px 12px; background: #d1fae5; color: #065f46; border: 1px solid #86efac; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge &mdash; no further action needed</button>
+                                </form>
+                                {% else %}
+                                {# CASE B: No conversation — Collapsed review form #}
+                                <details>
+                                    <summary style="font-size: 0.85em; color: #2563eb; cursor: pointer; font-weight: 500;">Review this submission</summary>
+                                    <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=lease_data.lease_group_id, payment_id=thread.action_payment_id) }}" enctype="multipart/form-data" style="margin-top: 8px;">
+                                        <div style="margin-bottom: 6px;">
+                                            <select name="review_type" required onchange="toggleFlagWarning(this)" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em;">
+                                                <option value="acknowledged">Acknowledge</option>
+                                                <option value="flagged">Raise a flag</option>
+                                            </select>
+                                        </div>
+                                        <div style="margin-bottom: 4px;">
+                                            <textarea name="internal_note" rows="1" class="reply-box" placeholder="Add a note..." style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
+                                            <span class="flag-warning" style="display: none; font-size: 0.8em; color: #92400e; margin-top: 4px;">This message will be shown to the tenant.</span>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.8em;">
+                                            <button type="submit" style="padding: 6px 14px; background: #374151; color: white; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Save review</button>
+                                        </div>
+                                    </form>
+                                </details>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
             {% endif %}
         </div>
 
@@ -4519,9 +4847,14 @@ function openSubmissionsModal(month, year, monthName) {
     var body = document.getElementById('submissionsModalBody');
     var title = document.getElementById('submissionsModalTitle');
     var storage = document.getElementById('payment-submissions');
+    var threadStorage = document.getElementById('payment-thread-view');
     if (!modal || !body) return;
 
-    // Defensive: move any leftover cards back to storage
+    // Defensive: move any leftover thread blocks back to their storage
+    body.querySelectorAll('.payment-thread').forEach(function(el) {
+        if (threadStorage) threadStorage.appendChild(el);
+    });
+    // Defensive: move any leftover legacy cards back to storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
     var empties = storage.querySelectorAll('.modal-empty-state');
     empties.forEach(function(el) { el.remove(); });
@@ -4529,17 +4862,38 @@ function openSubmissionsModal(month, year, monthName) {
     // Ensure review mode (not history)
     body.classList.remove('history-view');
 
-    // Move only matching month cards
+    // Move matching legacy cards into modal (hidden — kept for history view)
     var allCards = document.querySelectorAll('[data-period-month][data-period-year]');
     allCards.forEach(function(card) {
         if (String(card.dataset.periodMonth) === String(month) &&
             String(card.dataset.periodYear) === String(year)) {
+            card.style.display = 'none';
             body.appendChild(card);
         }
     });
 
-    // Empty state if no cards matched
-    if (!body.querySelector('[data-period-month]')) {
+    // Move matching thread blocks into modal (visible)
+    var hasThreads = false;
+    if (threadStorage) {
+        threadStorage.querySelectorAll('.payment-thread').forEach(function(el) {
+            if (String(el.dataset.threadMonth) === String(month) &&
+                String(el.dataset.threadYear) === String(year)) {
+                el.style.display = '';
+                body.appendChild(el);
+                hasThreads = true;
+            }
+        });
+    }
+
+    // If no threads, unhide legacy cards as fallback
+    if (!hasThreads) {
+        body.querySelectorAll('[data-period-month]').forEach(function(el) {
+            el.style.display = '';
+        });
+    }
+
+    // Empty state if nothing at all
+    if (!hasThreads && !body.querySelector('[data-period-month]')) {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
@@ -4572,9 +4926,18 @@ function openFullHistoryModal() {
     var body = document.getElementById('submissionsModalBody');
     var title = document.getElementById('submissionsModalTitle');
     var storage = document.getElementById('payment-submissions');
+    var threadStorage = document.getElementById('payment-thread-view');
     if (!modal || !body) return;
 
-    // Defensive: move any leftover cards back to storage
+    // Defensive: move any leftover thread blocks back first
+    body.querySelectorAll('.payment-thread').forEach(function(el) {
+        el.style.display = 'none';
+        if (threadStorage) threadStorage.appendChild(el);
+    });
+    // Defensive: unhide and move any leftover legacy cards back
+    body.querySelectorAll('[data-period-month]').forEach(function(el) {
+        el.style.display = '';
+    });
     while (body.firstChild) { storage.appendChild(body.firstChild); }
     var empties = storage.querySelectorAll('.modal-empty-state');
     empties.forEach(function(el) { el.remove(); });
@@ -4582,9 +4945,12 @@ function openFullHistoryModal() {
     // Enable history (read-only) mode
     body.classList.add('history-view');
 
-    // Move ALL submission cards into modal
+    // Move ALL submission cards into modal (visible)
     var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
-    allCards.forEach(function(card) { body.appendChild(card); });
+    allCards.forEach(function(card) {
+        card.style.display = '';
+        body.appendChild(card);
+    });
 
     // Empty state if no cards exist
     if (!body.querySelector('[data-period-month]')) {
@@ -4610,9 +4976,19 @@ function viewFullHistory() {
     var body = document.getElementById('submissionsModalBody');
     var title = document.getElementById('submissionsModalTitle');
     var storage = document.getElementById('payment-submissions');
+    var threadStorage = document.getElementById('payment-thread-view');
     if (!body || !storage) return;
 
-    // Move current cards back to storage
+    // Move thread blocks back to their storage
+    body.querySelectorAll('.payment-thread').forEach(function(el) {
+        el.style.display = 'none';
+        if (threadStorage) threadStorage.appendChild(el);
+    });
+
+    // Move current legacy cards back to storage
+    body.querySelectorAll('[data-period-month]').forEach(function(el) {
+        el.style.display = '';
+    });
     while (body.firstChild) { storage.appendChild(body.firstChild); }
     var empties = storage.querySelectorAll('.modal-empty-state');
     empties.forEach(function(el) { el.remove(); });
@@ -4620,9 +4996,12 @@ function viewFullHistory() {
     // Enable history (read-only) mode
     body.classList.add('history-view');
 
-    // Move ALL submission cards into modal
+    // Move ALL submission cards into modal (visible)
     var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
-    allCards.forEach(function(card) { body.appendChild(card); });
+    allCards.forEach(function(card) {
+        card.style.display = '';
+        body.appendChild(card);
+    });
 
     // Empty state if no cards exist
     if (!body.querySelector('[data-period-month]')) {
@@ -4647,9 +5026,13 @@ function backToMonthView() {
     var body = document.getElementById('submissionsModalBody');
     var title = document.getElementById('submissionsModalTitle');
     var storage = document.getElementById('payment-submissions');
+    var threadStorage = document.getElementById('payment-thread-view');
     if (!body || !storage) return;
 
-    // Move all cards back to storage
+    // Move all legacy cards back to storage (unhide first)
+    body.querySelectorAll('[data-period-month]').forEach(function(el) {
+        el.style.display = '';
+    });
     while (body.firstChild) { storage.appendChild(body.firstChild); }
     var empties = storage.querySelectorAll('.modal-empty-state');
     empties.forEach(function(el) { el.remove(); });
@@ -4657,17 +5040,38 @@ function backToMonthView() {
     // Disable history mode (restore interactivity)
     body.classList.remove('history-view');
 
-    // Move only the original month's cards back in
+    // Move matching legacy cards back in (hidden — kept for history view)
     var allCards = storage.querySelectorAll('[data-period-month][data-period-year]');
     allCards.forEach(function(card) {
         if (String(card.dataset.periodMonth) === String(submissionsState.month) &&
             String(card.dataset.periodYear) === String(submissionsState.year)) {
+            card.style.display = 'none';
             body.appendChild(card);
         }
     });
 
-    // Empty state if no cards matched
-    if (!body.querySelector('[data-period-month]')) {
+    // Move matching thread blocks back in (visible)
+    var hasThreads = false;
+    if (threadStorage) {
+        threadStorage.querySelectorAll('.payment-thread').forEach(function(el) {
+            if (String(el.dataset.threadMonth) === String(submissionsState.month) &&
+                String(el.dataset.threadYear) === String(submissionsState.year)) {
+                el.style.display = '';
+                body.appendChild(el);
+                hasThreads = true;
+            }
+        });
+    }
+
+    // If no threads, unhide legacy cards as fallback
+    if (!hasThreads) {
+        body.querySelectorAll('[data-period-month]').forEach(function(el) {
+            el.style.display = '';
+        });
+    }
+
+    // Empty state if nothing
+    if (!hasThreads && !body.querySelector('[data-period-month]')) {
         var p = document.createElement('p');
         p.className = 'modal-empty-state';
         p.style.cssText = 'text-align: center; color: #9ca3af; padding: 32px 0; font-size: 0.95em;';
@@ -4690,9 +5094,21 @@ function closeSubmissionsModal() {
     var modal = document.getElementById('submissionsModal');
     var body = document.getElementById('submissionsModalBody');
     var storage = document.getElementById('payment-submissions');
+    var threadStorage = document.getElementById('payment-thread-view');
     if (!modal || !body || !storage) return;
 
-    // Always move all cards back to storage
+    // Move thread blocks back to their storage
+    body.querySelectorAll('.payment-thread').forEach(function(el) {
+        el.style.display = 'none';
+        if (threadStorage) threadStorage.appendChild(el);
+    });
+
+    // Unhide legacy cards before moving them back
+    body.querySelectorAll('[data-period-month]').forEach(function(el) {
+        el.style.display = '';
+    });
+
+    // Move all remaining children back to legacy storage
     while (body.firstChild) { storage.appendChild(body.firstChild); }
 
     // Reset state
@@ -4701,6 +5117,13 @@ function closeSubmissionsModal() {
     submissionsState.origin = 'month';
     modal.classList.remove('visible');
     document.body.style.overflow = '';
+
+    // Return to attention overview if navigated from there
+    if (window._returnToAttention) {
+        var returnUrl = window._returnToAttention;
+        window._returnToAttention = null;
+        window.location = returnUrl;
+    }
 }
 
 var submissionsModalEl = document.getElementById('submissionsModal');
@@ -4801,6 +5224,68 @@ document.addEventListener('keydown', function(e) {
         <div class="global-loading-message" id="globalLoadingMessage"></div>
     </div>
 </div>
+
+{% if focus_monthly_attention %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var section = document.getElementById('monthly-summary');
+    if (!section) return;
+    var collapsed = document.getElementById('monthly-summary-collapsed');
+    var full = document.getElementById('monthly-summary-full');
+    if (collapsed) collapsed.style.display = 'none';
+    if (full) full.style.display = 'block';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var header = section.querySelector('h3');
+    var target = header || section;
+    target.style.transition = 'background-color 0.4s ease';
+    target.style.backgroundColor = '#f0f4ff';
+    setTimeout(function () { target.style.backgroundColor = ''; }, 1500);
+});
+</script>
+{% endif %}
+
+{% if open_month %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var parts = '{{ open_month }}'.split('-');
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10);
+    var monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+    var monthName = monthNames[month - 1] || 'Unknown';
+
+    // Expand the monthly summary if collapsed
+    var collapsed = document.getElementById('monthly-summary-collapsed');
+    var full = document.getElementById('monthly-summary-full');
+    if (collapsed) collapsed.style.display = 'none';
+    if (full) full.style.display = 'block';
+
+    {% if return_to_attention %}
+    window._returnToAttention = '/?return_attention_for={{ lease_data.id }}';
+    {% endif %}
+
+    // Allow DOM to repaint after expanding, then open modal
+    setTimeout(function () {
+        if (typeof openSubmissionsModal === 'function') {
+            openSubmissionsModal(month, year, monthName);
+        }
+
+        {% if return_to_attention %}
+        var body = document.getElementById('submissionsModalBody');
+        if (body) {
+            var backLink = document.createElement('a');
+            backLink.href = '/?return_attention_for={{ lease_data.id }}';
+            backLink.textContent = '\u2190 Back to attention items';
+            backLink.style.cssText = 'display:block; font-size:0.85em; color:#6b7280; text-decoration:none; margin-bottom:12px;';
+            backLink.onmouseover = function() { this.style.textDecoration='underline'; };
+            backLink.onmouseout = function() { this.style.textDecoration='none'; };
+            body.insertBefore(backLink, body.firstChild);
+        }
+        {% endif %}
+    }, 0);
+});
+</script>
+{% endif %}
 
 </body>
 </html>

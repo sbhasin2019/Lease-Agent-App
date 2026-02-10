@@ -45,8 +45,8 @@ Status: NOT STARTED
   2. Drag-and-drop card reordering (SortableJS via CDN)
      with persistence to dashboard_prefs.json
   3. Card grouping (folder-style group cards) with persistence
-  4. Dashboard attention badge (visual indicator + trigger logic
-     for _needs_attention flag, which is currently always False)
+  4. Dashboard attention badge — COMPLETE (2026-02-11).
+     Moved to PROJECT_FIXES_AND_DECISIONS.md.
 
   Constraint: Presentation preferences must NEVER live inside
   lease_data.json. A separate preferences file is required.
@@ -91,6 +91,32 @@ Status: NOT STARTED
     from the old dashboard card design)
 
   Safe to remove. No functional impact. Low priority.
+
+  ----------------------------------------------------------------
+
+  Follow-up Nudge (7-Day Tenant Non-Response)
+  Status: NOT STARTED
+
+    Intent: When a conversation is awaiting tenant response for
+    7+ days, show a soft, optional "Send follow-up?" nudge to
+    the landlord inside the per-month modal and as a suggestion
+    in the attention overview modal.
+
+    Design decisions locked:
+    - Nudge only when thread.status == "awaiting_tenant" and
+      last landlord event >= 7 days ago
+    - NOT a popup, NOT blocking, NOT required
+    - Pre-fills editable default message, uses existing
+      submit_payment_review endpoint (review_type = "response")
+    - Dismiss is per-thread (session-only initially; persistence
+      to be evaluated later)
+    - Does NOT inflate attention badge count
+
+    Open questions:
+    - Should dismissal persist across sessions? If so, where?
+      (dashboard_prefs.json is a candidate)
+    - Should the nudge appear in the attention overview as a
+      separate "Suggestions" section below real attention items?
 
 ----------------------------------------------------------------
 

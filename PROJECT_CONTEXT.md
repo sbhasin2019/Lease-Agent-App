@@ -504,6 +504,68 @@ Default branch: main
 Local development on macOS (Terminal + Python venv)
 
 ----------------------------------------------------------------
+  DASHBOARD ATTENTION BADGES
+ ----------------------------------------------------------------
+
+  Dashboard cards show a 🙋🏻 badge with a count when the landlord's
+  attention is needed. The badge is a calm human nudge, not an alert.
+
+  compute_lease_attention_count(lease_group_id, all_confirmations, all_events)
+    Returns int: number of months needing attention (0 = no badge).
+
+    A month needs attention when ANY payment category has:
+    - pending_review: submissions exist but no landlord events for
+      that category (category-aware via cat_has_any_review pattern)
+    - tenant_replied: open conversation where tenant spoke last
+
+    "awaiting_tenant" (landlord spoke last) NEVER triggers attention.
+
+  get_lease_attention_items(lease_group_id, all_confirmations, all_events)
+    Returns list of {year, month, reasons} dicts for the attention
+    overview modal.
+
+  Clicking the badge opens an Attention Overview modal listing
+  affected months with "View" links that navigate to the per-month
+  modal with a back-link.
+
+  ----------------------------------------------------------------
+  PAYMENT THREADS
+  ----------------------------------------------------------------
+
+  build_payment_threads(month_payments, payment_events)
+    Groups a month's submissions by category (rent → maintenance →
+    utilities) into narrative-style threads with merged timelines.
+
+    Per thread:
+      payment_type, status, status_display, submission_count,
+      latest_submission, action_payment_id, conversation_open,
+      timeline (chronological list of submissions + events)
+
+    Status values:
+      awaiting_landlord — submission or tenant reply needs action
+      awaiting_tenant   — landlord flagged/replied, waiting on tenant
+      resolved          — all acknowledged, conversation closed
+
+    Action targeting rule (per category):
+      action_payment_id =
+        active_conversation_payment_id if it exists,
+        else latest_submission_payment_id
+
+    All landlord actions (acknowledge / flag / reply) MUST target
+    action_payment_id. Templates and JS must never infer which
+    payment_id to use.
+
+    Thread blocks are server-rendered in a hidden container and
+    moved into modals via the same DOM movement pattern as legacy
+    payment cards.
+
+  Smart redirect after review actions:
+    - If same month still has unresolved threads → redirect with
+      open_month + return_to=attention (re-opens month modal)
+    - If all threads resolved → redirect with return_attention_for
+      (opens attention overview modal)
+
+----------------------------------------------------------------
 WHAT IS NOT IMPLEMENTED
 ----------------------------------------------------------------
 
@@ -515,7 +577,7 @@ ACTIVE_ROADMAP.md.
 - Reminder / proactive nudge system for missing payment categories
 - Dashboard preferences (drag-and-drop ordering, card grouping,
   folder-style groups)
-- Dashboard attention badges (_needs_attention is always False)
+- Follow-up nudge system (7-day tenant non-response prompts)
 - Renewal intent prompts and suppression logic
 - Termination creation UI and routes (only data layer exists)
 - User authentication or accounts

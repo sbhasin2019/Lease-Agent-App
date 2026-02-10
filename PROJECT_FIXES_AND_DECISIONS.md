@@ -12,7 +12,99 @@ For planned future work, see ACTIVE_ROADMAP.md.
 
 ----------------------------------------------------------------
 
-2026-02-10  Dashboard card redesign (Phase 1)
+----------------------------------------------------------------
+
+  2026-02-11  Dashboard attention badges (Phase 1)
+
+    Added 🙋🏻 badge to dashboard cards showing count of months
+    needing landlord attention. Badge appears inline next to the
+    lease card title. Hidden when count is 0.
+
+    Attention triggers (category-aware):
+    - pending_review: category has submissions but zero landlord
+      events (uses cat_has_any_review pattern to avoid false
+      triggers from duplicate submissions)
+    - tenant_replied: open conversation where tenant spoke last
+
+    "awaiting_tenant" NEVER triggers attention. This is a locked
+    rule — the badge answers "does this need MY action?" not
+    "is something happening?"
+
+    Attention Overview modal: clicking the badge opens a modal
+    listing affected months with reasons and "View" links.
+
+    Helper functions:
+    - compute_lease_attention_count() — returns int
+    - get_lease_attention_items() — returns list of month items
+
+    Dashboard route loads payment + review data once (not per-lease)
+    and passes computed _needs_attention / _attention_count to
+    each lease dict.
+
+  ----------------------------------------------------------------
+
+  2026-02-11  Payment Threads — grouped per-month modal view
+
+    Replaced the multi-card per-month modal with a narrative-style
+    thread view. One thread per payment type (Rent / Maintenance /
+    Utilities), each with a merged chronological timeline.
+
+    build_payment_threads() is the canonical grouped model.
+    Action targeting rule: action_payment_id is computed per
+    category — active_conversation_payment_id if it exists,
+    else latest_submission_payment_id. Templates NEVER infer
+    which payment_id to target.
+
+    Thread blocks are server-rendered in #payment-thread-view
+    (hidden container) and moved into modals alongside legacy
+    cards (threads visible, legacy cards hidden). "View full
+    history" switches to legacy card view.
+
+    Thread status values: awaiting_landlord, awaiting_tenant,
+    resolved. Status display uses second-person: "Needs your
+    action", "Awaiting tenant response", "Resolved".
+
+  ----------------------------------------------------------------
+
+  2026-02-11  Reply vs Acknowledge — UX clarification
+
+    Added "or" divider between Reply form and Acknowledge button
+    in open-conversation action areas (both legacy cards and
+    thread blocks). Makes it visually clear these are alternative
+    actions, not sequential steps.
+
+    Acknowledge button label changed to:
+    "Acknowledge — no further action needed"
+
+  ----------------------------------------------------------------
+
+  2026-02-11  Smart redirect after landlord review action
+
+    submit_payment_review now checks post-save state:
+    - If same month still has unresolved threads → redirects with
+      open_month=YYYY-MM&return_to=attention (re-opens month modal)
+    - If all threads in month resolved → redirects with
+      return_attention_for=lease_id (opens attention overview)
+    - Fallback: plain lease detail page
+
+    Uses build_payment_threads() to re-evaluate thread status
+    after the new event is saved.
+
+  ----------------------------------------------------------------
+
+  2026-02-11  Reply box compact sizing
+
+    All landlord/tenant reply textareas use a dedicated .reply-box
+    CSS class with hard pixel heights (26px default, 52px max).
+    Inline padding/font-size/height removed from all 4 textareas
+    to prevent specificity conflicts.
+
+    Labels above reply boxes reduced to font-size: 0.8em with
+    2px margin-bottom. Wrapper divs reduced to 4px margin-bottom.
+
+  ----------------------------------------------------------------
+
+  2026-02-10  Dashboard card redesign (Phase 1)
 
   Replaced the old dashboard cards with a calmer informational
   design.

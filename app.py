@@ -1205,6 +1205,373 @@ def compute_monthly_coverage(expected_payments, month_payments):
     }
 
 
+def compute_lease_attention_count(lease_group_id, all_confirmations, all_events):
+    """Count months needing landlord attention for a lease group.
+
+    A month needs attention if ANY payment in that month has:
+      - tenant_replied: open conversation, tenant spoke last
+      - pending_review: submission with no landlord events at all
+      - flagged: open conversation (landlord spoke last)
+
+    Args:
+        lease_group_id: str
+        all_confirmations: list (pre-loaded from payment_data.json)
+        all_events: list (pre-loaded from landlord_review_data.json)
+
+    Returns:
+        int: number of months needing attention (0 = no attention needed)
+    """
+    # Filter confirmations for this lease group
+    confirmations = [c for c in all_confirmations
+                     if c.get("lease_group_id") == lease_group_id]
+    if not confirmations:
+        return 0
+
+    # Filter and normalize events for this lease group
+    events = [_normalize_event(e) for e in all_events
+              if e.get("lease_group_id") == lease_group_id]
+
+    # Group events by payment_id and compute conversation state
+    payment_events = {}
+    for event in events:
+        pid = event.get("payment_id")
+        if pid:
+            if pid not in payment_events:
+                payment_events[pid] = []
+            payment_events[pid].append(event)
+
+    payment_conversations = {}
+    for pid, evts in payment_events.items():
+        evts.sort(key=lambda e: e.get("created_at", ""))
+        payment_conversations[pid] = get_conversation_state(evts)
+
+    # Group confirmations by (year, month)
+    months = {}
+    for c in confirmations:
+        key = (c.get("period_year"), c.get("period_month"))
+        if key not in months:
+            months[key] = []
+        months[key].append(c)
+
+    # Count months needing attention (category-aware)
+    attention_count = 0
+    for month_key, month_payments in months.items():
+        month_needs_attention = False
+
+        # Group by category for cat_has_any_review check
+        cat_payments = {}
+        for pc in month_payments:
+            ctype = pc.get("confirmation_type")
+            if ctype not in cat_payments:
+                cat_payments[ctype] = []
+            cat_payments[ctype].append(pc)
+
+        for cat, cat_pcs in cat_payments.items():
+            # Check if ANY payment in this category has landlord events
+            cat_has_any_review = any(
+                any(e.get("actor") == "landlord"
+                    for e in payment_events.get(pc.get("id"), []))
+                for pc in cat_pcs
+            )
+
+            # Check for tenant_replied (per-payment, always triggers attention)
+            for pc in cat_pcs:
+                pid = pc.get("id")
+                convo = payment_conversations.get(pid, {"open": False, "thread": []})
+                if convo["open"] and convo["thread"]:
+                    last_event = convo["thread"][-1]
+                    if last_event.get("actor") == "tenant":
+                        month_needs_attention = True
+                        break
+
+            if month_needs_attention:
+                break
+
+            # pending_review: only if NO submission in this category was reviewed
+            if not cat_has_any_review:
+                month_needs_attention = True
+                break
+
+        if month_needs_attention:
+            attention_count += 1
+
+    return attention_count
+
+
+def get_lease_attention_items(lease_group_id, all_confirmations, all_events):
+    """List months needing landlord attention for a lease group.
+
+    For each month with at least one payment requiring attention,
+    returns the month and a human-readable reason based on the
+    worst-case status across all payments in that month.
+
+    Args:
+        lease_group_id: str
+        all_confirmations: list (pre-loaded from payment_data.json)
+        all_events: list (pre-loaded from landlord_review_data.json)
+
+    Returns:
+        list of dicts, newest month first. Each dict:
+            year: int
+            month: int
+            month_name: str
+            reason: str (human-readable)
+    """
+    month_names = ["January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November",
+                   "December"]
+
+    # Filter confirmations for this lease group
+    confirmations = [c for c in all_confirmations
+                     if c.get("lease_group_id") == lease_group_id]
+    if not confirmations:
+        return []
+
+    # Filter and normalize events for this lease group
+    events = [_normalize_event(e) for e in all_events
+              if e.get("lease_group_id") == lease_group_id]
+
+    # Group events by payment_id and compute conversation state
+    payment_events = {}
+    for event in events:
+        pid = event.get("payment_id")
+        if pid:
+            if pid not in payment_events:
+                payment_events[pid] = []
+            payment_events[pid].append(event)
+
+    payment_conversations = {}
+    for pid, evts in payment_events.items():
+        evts.sort(key=lambda e: e.get("created_at", ""))
+        payment_conversations[pid] = get_conversation_state(evts)
+
+    # Group confirmations by (year, month)
+    months = {}
+    for c in confirmations:
+        key = (c.get("period_year"), c.get("period_month"))
+        if key not in months:
+            months[key] = []
+        months[key].append(c)
+
+    # Collect months needing attention with worst-case reason (category-aware)
+    items = []
+    for (year, month), month_payments in months.items():
+        worst_priority = 999
+        worst_reason = None
+
+        # Group by category for cat_has_any_review check
+        cat_payments = {}
+        for pc in month_payments:
+            ctype = pc.get("confirmation_type")
+            if ctype not in cat_payments:
+                cat_payments[ctype] = []
+            cat_payments[ctype].append(pc)
+
+        for cat, cat_pcs in cat_payments.items():
+            cat_has_any_review = any(
+                any(e.get("actor") == "landlord"
+                    for e in payment_events.get(pc.get("id"), []))
+                for pc in cat_pcs
+            )
+
+            # tenant_replied (per-payment, always triggers attention)
+            for pc in cat_pcs:
+                pid = pc.get("id")
+                convo = payment_conversations.get(pid, {"open": False, "thread": []})
+                if convo["open"] and convo["thread"]:
+                    last_event = convo["thread"][-1]
+                    if last_event.get("actor") == "tenant":
+                        if worst_priority > 1:
+                            worst_priority = 1
+                            worst_reason = "Tenant replied"
+
+            # pending_review (category-aware: only if entire category is unreviewed)
+            if not cat_has_any_review:
+                if worst_priority > 2:
+                    worst_priority = 2
+                    worst_reason = "Awaiting your review"
+
+        if worst_reason:
+            items.append({
+                "year": year,
+                "month": month,
+                "month_name": month_names[month - 1] if month and 1 <= month <= 12 else "Unknown",
+                "reason": worst_reason,
+            })
+
+    items.sort(key=lambda x: (x["year"], x["month"]), reverse=True)
+    return items
+
+
+def build_payment_threads(month_payments, payment_events):
+    """Build payment threads grouped by confirmation type for a single month.
+
+    Groups submissions by category, merges with review/reply events into
+    a chronological timeline, derives status, and computes action targeting.
+
+    Action targeting rule (per category):
+        latest_submission_payment_id: most recent submission by submitted_at
+        active_conversation_payment_id: payment with open conversation
+            (if multiple, the one with the most recent event)
+        action_payment_id:
+            active_conversation_payment_id if it exists,
+            else latest_submission_payment_id
+
+    All landlord actions (acknowledge / flag / reply) MUST target
+    action_payment_id. Templates and JS must never infer which
+    payment_id to use.
+
+    Args:
+        month_payments: list of payment confirmation dicts for this month
+        payment_events: dict {payment_id: [normalized events, oldest first]}
+
+    Returns:
+        list of thread dicts, ordered: rent -> maintenance -> utilities.
+        Empty list if no payments.
+    """
+    CATEGORY_ORDER = ["rent", "maintenance", "utilities"]
+    CATEGORY_DISPLAY = {
+        "rent": "Rent", "maintenance": "Maintenance",
+        "utilities": "Utilities",
+    }
+    STATUS_DISPLAY = {
+        "awaiting_landlord": "Needs your action",
+        "awaiting_tenant": "Awaiting tenant response",
+        "resolved": "Resolved",
+    }
+
+    # Group payments by category
+    cat_buckets = {}
+    for pc in month_payments:
+        ctype = pc.get("confirmation_type")
+        if ctype not in cat_buckets:
+            cat_buckets[ctype] = []
+        cat_buckets[ctype].append(pc)
+
+    threads = []
+    for cat in CATEGORY_ORDER:
+        cat_pcs = cat_buckets.get(cat)
+        if not cat_pcs:
+            continue
+
+        # Sort submissions oldest first for timeline
+        cat_pcs_sorted = sorted(
+            cat_pcs, key=lambda c: c.get("submitted_at", ""))
+
+        # Compute conversation state once per payment (cached)
+        cat_conversations = {}
+        for pc in cat_pcs:
+            pid = pc.get("id")
+            cat_conversations[pid] = get_conversation_state(
+                payment_events.get(pid, []))
+
+        # --- Action targeting (CRITICAL — single source of truth) ---
+
+        # latest_submission_payment_id: most recent by submitted_at
+        latest_sub = cat_pcs_sorted[-1]
+        latest_submission_payment_id = latest_sub.get("id")
+
+        # active_conversation_payment_id: open conversation with most
+        # recent event as tiebreaker
+        active_conversation_payment_id = None
+        active_latest_event_time = ""
+        for pc in cat_pcs:
+            pid = pc.get("id")
+            convo = cat_conversations[pid]
+            if convo["open"] and convo["thread"]:
+                last_event_time = convo["thread"][-1].get("created_at", "")
+                if (active_conversation_payment_id is None
+                        or last_event_time > active_latest_event_time):
+                    active_conversation_payment_id = pid
+                    active_latest_event_time = last_event_time
+
+        # action_payment_id: active conversation wins, else latest submission
+        action_payment_id = (active_conversation_payment_id
+                             if active_conversation_payment_id
+                             else latest_submission_payment_id)
+
+        # --- Category status (cat_has_any_review pattern) ---
+
+        cat_has_any_review = any(
+            any(e.get("actor") == "landlord"
+                for e in payment_events.get(pc.get("id"), []))
+            for pc in cat_pcs
+        )
+
+        worst = 4  # 4 = acknowledged/resolved (best)
+        for pc in cat_pcs:
+            pid = pc.get("id")
+            convo = cat_conversations[pid]
+            if convo["open"] and convo["thread"]:
+                last_event = convo["thread"][-1]
+                if last_event.get("actor") == "tenant":
+                    worst = min(worst, 1)  # tenant replied
+                else:
+                    worst = min(worst, 2)  # landlord spoke last
+            elif (not any(e.get("actor") == "landlord"
+                          for e in payment_events.get(pid, []))
+                  and not cat_has_any_review):
+                worst = min(worst, 3)  # pending review
+
+        # Map to thread-level status names
+        WORST_TO_STATUS = {1: "awaiting_landlord", 2: "awaiting_tenant",
+                           3: "awaiting_landlord", 4: "resolved"}
+        status = WORST_TO_STATUS.get(worst, "resolved")
+
+        # --- Build merged timeline (oldest first) ---
+
+        timeline = []
+
+        # Add all submissions
+        for pc in cat_pcs_sorted:
+            timeline.append({
+                "entry_type": "submission",
+                "payment_id": pc.get("id"),
+                "timestamp": pc.get("submitted_at", ""),
+                "is_latest": pc.get("id") == latest_submission_payment_id,
+                "amount_declared": pc.get("amount_declared"),
+                "amount_agreed": pc.get("amount_agreed"),
+                "tds_deducted": pc.get("tds_deducted"),
+                "date_paid": pc.get("date_paid"),
+                "submitted_via": pc.get("submitted_via"),
+                "notes": pc.get("notes"),
+                "proof_files": pc.get("proof_files", []),
+            })
+
+        # Add all review/reply events across all submissions in category
+        for pc in cat_pcs:
+            pid = pc.get("id")
+            for event in payment_events.get(pid, []):
+                timeline.append({
+                    "entry_type": "event",
+                    "event_type": event.get("event_type"),
+                    "actor": event.get("actor"),
+                    "message": event.get("message"),
+                    "attachments": event.get("attachments", []),
+                    "timestamp": event.get("created_at", ""),
+                    "payment_id": pid,
+                })
+
+        # Sort everything chronologically
+        timeline.sort(key=lambda e: e.get("timestamp", ""))
+
+        threads.append({
+            "payment_type": cat,
+            "payment_type_display": CATEGORY_DISPLAY.get(cat, cat.title()),
+            "status": status,
+            "status_display": STATUS_DISPLAY.get(status, status),
+            "submission_count": len(cat_pcs),
+            "latest_submission": latest_sub,
+            "latest_submission_payment_id": latest_submission_payment_id,
+            "active_conversation_payment_id": active_conversation_payment_id,
+            "action_payment_id": action_payment_id,
+            "conversation_open": active_conversation_payment_id is not None,
+            "timeline": timeline,
+        })
+
+    return threads
+
+
 def load_lease_data():
     """Load saved lease data from JSON file if it exists.
 
@@ -1998,12 +2365,20 @@ def index():
     edit_mode = request.args.get("edit") == "true"
     new_lease = request.args.get("new") == "true"
     renew_from = request.args.get("renew_from")  # Lease ID to renew from
+    focus_monthly_attention = request.args.get("focus") == "monthly_attention"
+    open_month = request.args.get("open_month")  # e.g. "2026-01"
+    return_to_attention = request.args.get("return_to") == "attention"
+    return_attention_for = request.args.get("return_attention_for")
 
     # Dashboard-first: if no lease_id specified, show dashboard
     # Unless ?new=true is specified (show upload form)
     if not lease_id and not new_lease:
         # Dashboard shows only current versions (not old renewals)
         leases = get_all_leases(current_only=True)
+
+        # Load payment and review data once for attention badge computation.
+        all_confirmations = _load_all_payments().get("confirmations", [])
+        all_events = _load_all_landlord_reviews().get("reviews", [])
 
         # Pre-compute card view-model data for each lease.
         # versions_cache ensures get_lease_versions is called at most
@@ -2017,7 +2392,10 @@ def index():
             versions = versions_cache[lgid]
             lease["_earliest_start_date"] = get_earliest_start_date(versions)
             lease["_tenant_continuity"] = get_tenant_continuity_duration(versions, cv.get("lessee_name"))
-            lease["_needs_attention"] = False  # placeholder for future attention badge
+            attention_count = compute_lease_attention_count(lgid, all_confirmations, all_events)
+            lease["_needs_attention"] = attention_count > 0
+            lease["_attention_count"] = attention_count
+            lease["_attention_items"] = get_lease_attention_items(lgid, all_confirmations, all_events) if attention_count > 0 else []
 
         grouped_leases = group_leases_by_lessor(leases)
         global_alerts = get_global_alerts(leases)
@@ -2031,7 +2409,9 @@ def index():
                                reminder_status=None,
                                show_dashboard=True,
                                renew_from=None,
-                               renew_from_lease=None)
+                               renew_from_lease=None,
+                               return_attention_for=return_attention_for,
+                               payment_threads_by_month={})
 
     # Get all leases for sidebar/navigation (current only)
     leases = get_all_leases(current_only=True)
@@ -2295,6 +2675,17 @@ def index():
                                 break
                     ms["visible"] = has_missing or has_unresolved
 
+    # Build payment threads per month for grouped modal view
+    payment_threads_by_month = {}
+    if payment_confirmations and lease_data and not edit_mode:
+        for ms in monthly_summary:
+            y, m = ms["year"], ms["month"]
+            if ms["count"] > 0:
+                mp = [c for c in payment_confirmations
+                      if c.get("period_year") == y and c.get("period_month") == m]
+                payment_threads_by_month[(y, m)] = build_payment_threads(
+                    mp, payment_events)
+
     return render_template("index.html",
                            uploads=uploads,
                            lease_data=lease_data,
@@ -2311,7 +2702,11 @@ def index():
                            payment_confirmations=payment_confirmations,
                            payment_events=payment_events,
                            payment_conversation=payment_conversation,
-                           monthly_summary=monthly_summary)
+                           monthly_summary=monthly_summary,
+                           payment_threads_by_month=payment_threads_by_month,
+                           focus_monthly_attention=focus_monthly_attention,
+                           open_month=open_month,
+                           return_to_attention=return_to_attention)
 
 
 @app.route("/upload", methods=["POST"])
@@ -3050,6 +3445,33 @@ def submit_payment_review(lease_group_id, payment_id):
         flash("Review saved.", "success")
     else:
         flash("Failed to save review. Please try again.", "error")
+
+    # Smart redirect: stay on month modal if unresolved threads remain,
+    # otherwise return to attention overview.
+    period_year = payment_record.get("period_year")
+    period_month = payment_record.get("period_month")
+    if saved and redirect_lease_id and period_year and period_month:
+        # Re-load events after our save, rebuild threads for this month
+        all_confs = _load_all_payments().get("confirmations", [])
+        month_payments = [
+            c for c in all_confs
+            if c.get("lease_group_id") == lease_group_id
+            and c.get("period_year") == period_year
+            and c.get("period_month") == period_month
+        ]
+        all_evts = _load_all_landlord_reviews().get("reviews", [])
+        evt_map = {}
+        for e in all_evts:
+            evt_map.setdefault(e.get("payment_id"), []).append(_normalize_event(e))
+        threads = build_payment_threads(month_payments, evt_map)
+        month_has_unresolved = any(t["status"] != "resolved" for t in threads)
+
+        if month_has_unresolved:
+            open_month = f"{period_year}-{period_month:02d}"
+            return redirect(url_for("index", lease_id=redirect_lease_id,
+                                    open_month=open_month, return_to="attention"))
+        else:
+            return redirect(url_for("index", return_attention_for=redirect_lease_id))
 
     return redirect(url_for("index", lease_id=redirect_lease_id or ""))
 
