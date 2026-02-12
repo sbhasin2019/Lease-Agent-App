@@ -122,9 +122,9 @@ All save operations use atomic writes (tmp + fsync + rename).
   landlord_review_data.json
   - Landlord review events and conversation threads
   - Load: _load_all_landlord_reviews()  /  Save: _save_landlord_review_file()
-
-  termination_data.json
-  - Early lease termination events (data layer only; no UI exists)
+ 
+  termination_data.json                                                                                               
+  - Early lease termination events                                                                                    
   - Load: _load_all_terminations()  /  Save: _save_termination_file()
 
 All runtime data files are gitignored.
@@ -279,10 +279,10 @@ E. Termination Event (termination_data.json)
     terminated_by                       "landlord"
     note                                str | null
 
-  Note: Only the data layer and read functions exist. There is
-  no route or UI to create termination events. The governing
-  lease function consumes this data when determining which
-  version covers a given month.
+  Creation: create_termination_event() validates 5 checks and
+  appends to the file. POST /lease/<lease_id>/terminate route
+  with confirmation modal. The governing lease function consumes
+  this data when determining which version covers a given month.
 
 ----------------------------------------------------------------
 STATE MACHINES
@@ -420,7 +420,9 @@ Template safety:
 - Templates must NOT compute business logic.
 - All derived values are attached in routes via underscore-prefixed
   keys (e.g. _earliest_start_date, _tenant_continuity,
-  _needs_attention).
+  _needs_attention, _is_terminated, _is_expired, _can_renew,
+  _termination_date_display, _termination_days_elapsed,
+  _expiry_date_display).
 - Helper functions must NEVER reload JSON — always accept
   pre-loaded data as arguments.
 
@@ -438,6 +440,10 @@ Dashboard cards are calm summaries:
 - No urgency colour accents on cards
 - No delete buttons on cards
 - Expiry is informational (days + date), not alarming
+- Lifecycle ribbons: TERMINATED or EXPIRED (amber, full-width)
+  appear only when the CURRENT version qualifies
+- Primary Renew button appears when _can_renew is True
+- Lifecycle priority: TERMINATED > EXPIRED > ACTIVE
 
 Monthly summaries default to collapsed:
 - Both landlord and tenant see last 6 months by default
@@ -579,7 +585,6 @@ ACTIVE_ROADMAP.md.
   folder-style groups)
 - Follow-up nudge system (7-day tenant non-response prompts)
 - Renewal intent prompts and suppression logic
-- Termination creation UI and routes (only data layer exists)
 - User authentication or accounts
 - Email / SMS / push notifications
 - Payment verification or reconciliation

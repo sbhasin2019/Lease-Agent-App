@@ -856,6 +856,19 @@
             color: #fff;
         }
 
+        /* Urgency: Lifecycle (Terminated/Expired) - AMBER to match dashboard ribbons */
+        .reminder-item.urgency-lifecycle {
+            background: #fefce8;
+            border-color: #f59e0b;
+        }
+        .reminder-item.urgency-lifecycle .reminder-label { color: #92400e; }
+        .reminder-item.urgency-lifecycle .reminder-days { color: #78350f; }
+        .reminder-item.urgency-lifecycle .reminder-message { color: #92400e; }
+        .urgency-badge.urgency-lifecycle {
+            background: #f59e0b;
+            color: #fff;
+        }
+
         /* ========================================
            URGENCY ESCALATION - Visual Enhancements
            ======================================== */
@@ -923,6 +936,7 @@
         .view-actions .btn-edit,
         .view-actions .btn-reset,
         .view-actions .btn-renew,
+        .view-actions .btn-terminate,
         .view-actions form {
             margin: 0;
         }
@@ -1250,6 +1264,154 @@
         }
         .delete-trigger {
             cursor: pointer;
+        }
+
+        /* ========================================
+           TERMINATION UI
+           ======================================== */
+
+        /* Modal */
+        .terminate-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .terminate-modal-overlay.visible {
+            display: flex;
+        }
+        .terminate-modal {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 480px;
+            width: 90%;
+            overflow: hidden;
+        }
+        .terminate-modal-header {
+            background: #fefce8;
+            border-bottom: 1px solid #fde68a;
+            padding: 20px 24px;
+        }
+        .terminate-modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #92400e;
+        }
+        .terminate-modal-body {
+            padding: 24px;
+        }
+        .terminate-modal-warning {
+            background: #fefce8;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .terminate-modal-warning p {
+            margin: 0;
+            font-size: 14px;
+            color: #92400e;
+            line-height: 1.5;
+        }
+        .terminate-modal-field {
+            margin-bottom: 16px;
+        }
+        .terminate-modal-field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .terminate-modal-field input[type="date"],
+        .terminate-modal-field textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .terminate-modal-field input[type="date"]:focus,
+        .terminate-modal-field textarea:focus {
+            outline: none;
+            border-color: #d97706;
+            box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
+        }
+        .terminate-modal-field textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .terminate-modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .terminate-modal-cancel {
+            padding: 12px 24px;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .terminate-modal-cancel:hover {
+            background: #f3f4f6;
+        }
+        .terminate-modal-submit {
+            padding: 12px 24px;
+            background: #d97706;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .terminate-modal-submit:hover {
+            background: #b45309;
+        }
+
+        /* Button: Terminate - Amber */
+        .btn-terminate {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 12px 24px;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-terminate:hover {
+            background: #fde68a;
+            border-color: #fbbf24;
+        }
+
+        /* Dashboard: lifecycle ribbon (TERMINATED / EXPIRED) */
+        .lease-card-terminated-ribbon,
+        .lease-card-expired-ribbon {
+            background: #f59e0b;
+            color: #fff;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 6px 0;
         }
 
         /* ========================================
@@ -2335,6 +2497,26 @@
             border-color: #d1d5db;
         }
 
+        /* Primary Renew button for terminated/expired leases */
+        .btn-renew-primary {
+            display: block;
+            width: 100%;
+            padding: 10px 16px;
+            background: #059669;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-renew-primary:hover {
+            background: #047857;
+        }
+
         /* Empty State */
         .dashboard-empty {
             text-align: center;
@@ -2469,6 +2651,11 @@
                 {% set days_remaining = lcv.lease_end_date | days_until %}
                 <div class="lease-card">
                     {% if lease._attention_count %}<button type="button" onclick="openAttentionModal('{{ lease.id }}')" class="lease-card-attention" aria-label="View months needing attention for {{ lcv.lease_nickname or 'this lease' }}"><span class="lease-card-attention-icon">🙋🏻</span> Needs attention</button>{% endif %}
+                    {% if lease._is_terminated %}
+                    <div class="lease-card-terminated-ribbon">TERMINATED</div>
+                    {% elif lease._is_expired %}
+                    <div class="lease-card-expired-ribbon">EXPIRED</div>
+                    {% endif %}
                     <div class="lease-card-content">
                         <div class="lease-card-title">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
                         <div class="lease-card-subtitle">{% if lease._earliest_start_date %}Lease started on {{ lease._earliest_start_date | format_date }}{% else %}Start date unknown{% endif %}</div>
@@ -2480,10 +2667,14 @@
                                 {% endif %}
                             </div>
                             <div class="lease-card-body-right">
-                                {% if days_remaining is not none %}
-                                <div class="lease-card-expiry-label">{% if days_remaining < 0 %}Days past expiry{% else %}Days until expiry{% endif %}</div>
-                                <div class="lease-card-expiry-value">{% if days_remaining < 0 %}{{ days_remaining | abs }}{% else %}{{ days_remaining }}{% endif %}</div>
-                                <div class="lease-card-expiry-date">{% if days_remaining < 0 %}(Ended {{ lcv.lease_end_date | format_date }}){% else %}(Ends {{ lcv.lease_end_date | format_date }}){% endif %}</div>
+                                {% if lease._is_terminated %}
+                                <div class="lease-card-expiry-label">Terminated</div>
+                                <div class="lease-card-expiry-value">{{ lease._termination_days_elapsed }} <span style="font-size:0.45em;font-weight:400;">days ago</span></div>
+                                <div class="lease-card-expiry-date">(Terminated on {{ lease._termination_date_display }})</div>
+                                {% elif days_remaining is not none %}
+                                <div class="lease-card-expiry-label">{% if days_remaining < 0 %}Expired{% else %}Days until expiry{% endif %}</div>
+                                <div class="lease-card-expiry-value">{% if days_remaining < 0 %}{{ days_remaining | abs }} <span style="font-size:0.45em;font-weight:400;">days ago</span>{% else %}{{ days_remaining }}{% endif %}</div>
+                                <div class="lease-card-expiry-date">{% if days_remaining < 0 %}(Expired on {{ lcv.lease_end_date | format_date }}){% else %}(Ends {{ lcv.lease_end_date | format_date }}){% endif %}</div>
                                 {% else %}
                                 <div class="lease-card-expiry-none">No end date set</div>
                                 {% endif %}
@@ -2492,6 +2683,9 @@
                         <div class="lease-card-rent">Monthly rent: {% if lcv.monthly_rent %}<span class="lease-card-rent-amount">₹{{ lcv.monthly_rent | format_money }}</span>{% else %}—{% endif %}</div>
                     </div>
                     <div class="lease-card-actions">
+                        {% if lease._can_renew %}
+                        <a href="/?new=true&renew_from={{ lease.id }}" class="btn-renew-primary">Renew Lease</a>
+                        {% endif %}
                         <a href="/?lease_id={{ lease.id }}" class="btn-view-lease">View Lease</a>
                     </div>
                 </div>
@@ -2572,11 +2766,37 @@
         </a>
     </div>
 
-    {% if reminder_status and (reminder_status.lease_expiry or reminder_status.rent_payment) %}
+    {% if lease_data._termination or lease_data._is_expired or (reminder_status and (reminder_status.lease_expiry or reminder_status.rent_payment)) %}
     <div class="reminder-card">
         <h3>Reminders</h3>
         <div class="reminder-grid">
-            {% if reminder_status.lease_expiry %}
+            {% if lease_data._termination %}
+            <div class="reminder-item urgency-lifecycle">
+                <div class="reminder-label">
+                    Lease Terminated
+                    <span class="urgency-badge urgency-lifecycle">
+                        <span class="urgency-icon">&#128680;</span>terminated
+                    </span>
+                </div>
+                <div class="reminder-days">
+                    {{ lease_data._termination_days_elapsed }} <span>days ago</span>
+                </div>
+                <div class="reminder-message">(Terminated on {{ lease_data._termination_date_display }})</div>
+            </div>
+            {% elif lease_data._is_expired %}
+            <div class="reminder-item urgency-lifecycle">
+                <div class="reminder-label">
+                    Lease Expired
+                    <span class="urgency-badge urgency-lifecycle">
+                        <span class="urgency-icon">&#128680;</span>expired
+                    </span>
+                </div>
+                <div class="reminder-days">
+                    {{ reminder_status.lease_expiry.days_remaining|abs }} <span>days ago</span>
+                </div>
+                <div class="reminder-message">(Expired on {{ lease_data._expiry_date_display }})</div>
+            </div>
+            {% elif reminder_status.lease_expiry %}
             <div class="reminder-item urgency-{{ reminder_status.lease_expiry.urgency }}">
                 <div class="reminder-label">
                     Lease Expiry
@@ -2596,7 +2816,11 @@
                 <div class="reminder-message">{{ reminder_status.lease_expiry.message }}</div>
             </div>
             {% endif %}
-            {% if reminder_status.rent_payment %}
+            {% if lease_data._can_renew %}
+            <div class="reminder-item" style="display:flex;align-items:center;justify-content:center;">
+                <a href="/?new=true&renew_from={{ lease_data.id }}" class="btn-renew-primary">Renew Lease</a>
+            </div>
+            {% elif reminder_status.rent_payment %}
             <div class="reminder-item urgency-{{ reminder_status.rent_payment.urgency }}">
                 <div class="reminder-label">
                     Rent Payment
@@ -2710,6 +2934,12 @@
         <div class="view-actions">
             <a href="/?lease_id={{ lease_data.id }}&edit=true" class="btn-edit">Edit Lease</a>
             <a href="/?new=true&renew_from={{ lease_data.id }}" class="btn-renew">Add Renewal Lease</a>
+            {% if lease_data.is_current and not lease_data._termination %}
+            <button type="button" class="btn-terminate"
+                    onclick="openTerminateModal('{{ lease_data.id }}', '{{ cv.lease_start_date or "" }}', '{{ cv.lease_end_date or "" }}')">
+                Record Early Termination
+            </button>
+            {% endif %}
             <button type="button" class="btn-view-text" onclick="openTextModal()">
                 View Extracted Text
             </button>
@@ -4389,6 +4619,48 @@ let unifiedChangesMap = {};
     </div>
 </div>
 
+<!-- TERMINATION CONFIRMATION MODAL -->
+<div class="terminate-modal-overlay" id="terminateModal">
+    <div class="terminate-modal">
+        <div class="terminate-modal-header">
+            <h3>Record Early Termination</h3>
+        </div>
+        <div class="terminate-modal-body">
+            <div class="terminate-modal-warning">
+                <p>
+                    <strong>This action is permanent.</strong>
+                    Once recorded, this termination cannot be undone.
+                    The lease will be treated as ended from the
+                    termination date you set below.
+                </p>
+            </div>
+            <form id="terminateForm" action="" method="post">
+                <div class="terminate-modal-field">
+                    <label for="terminationDate">
+                        Termination Date
+                        <span style="color:#9ca3af; font-weight:400;">(must be within the lease period)</span>
+                    </label>
+                    <input type="date" id="terminationDate" name="termination_date" required>
+                </div>
+                <div class="terminate-modal-field">
+                    <label for="terminationNote">
+                        Note
+                        <span style="color:#9ca3af; font-weight:400;">(optional)</span>
+                    </label>
+                    <textarea id="terminationNote" name="termination_note"
+                              placeholder="Reason for early termination..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="terminate-modal-footer">
+            <button type="button" class="terminate-modal-cancel"
+                    onclick="closeTerminateModal()">Cancel</button>
+            <button type="submit" form="terminateForm"
+                    class="terminate-modal-submit">Confirm Termination</button>
+        </div>
+    </div>
+</div>
+
 <!-- MISSING DOCUMENT MODAL (legacy lease) -->
 <div class="missing-doc-overlay" id="missingDocumentModal">
     <div class="missing-doc-modal">
@@ -4589,6 +4861,46 @@ document.getElementById('deleteModalForm').addEventListener('submit', function(e
         e.preventDefault();
         alert('Confirmation text does not match. Deletion aborted.');
         return false;
+    }
+});
+</script>
+
+<!-- Termination modal script -->
+<script>
+function openTerminateModal(leaseId, startDate, endDate) {
+    var modal = document.getElementById('terminateModal');
+    var form = document.getElementById('terminateForm');
+    var dateInput = document.getElementById('terminationDate');
+    var noteInput = document.getElementById('terminationNote');
+
+    form.action = '/lease/' + leaseId + '/terminate';
+    dateInput.min = startDate || '';
+    dateInput.max = endDate || '';
+    dateInput.value = '';
+    noteInput.value = '';
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+    dateInput.focus();
+}
+
+function closeTerminateModal() {
+    var modal = document.getElementById('terminateModal');
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+var terminateModalEl = document.getElementById('terminateModal');
+if (terminateModalEl) {
+    terminateModalEl.addEventListener('click', function(e) {
+        if (e.target === this) closeTerminateModal();
+    });
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modal = document.getElementById('terminateModal');
+        if (modal && modal.classList.contains('visible')) closeTerminateModal();
     }
 });
 </script>

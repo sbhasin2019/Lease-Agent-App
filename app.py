@@ -710,6 +710,81 @@ def get_termination_for_lease(lease_id):
     return None
 
 
+def create_termination_event(lease_id, termination_date, note=None):
+    """Create and persist a termination event for a lease version.
+
+    Args:
+        lease_id: UUID of the specific lease version to terminate
+        termination_date: Effective termination date (YYYY-MM-DD string)
+        note: Optional free-text reason for termination
+
+    Returns:
+        dict: {"success": True, "termination": <record>}
+              or {"success": False, "error": "<message>"}
+    """
+    # 1. Lease exists?
+    lease = get_lease_by_id(lease_id)
+    if not lease:
+        return {"success": False, "error": "Lease not found."}
+
+    # 2. Is current version?
+    if not lease.get("is_current"):
+        return {"success": False,
+                "error": "Only the current lease version can be terminated."}
+
+    # 3. Already terminated?
+    existing = get_termination_for_lease(lease_id)
+    if existing:
+        return {"success": False,
+                "error": "This lease has already been terminated."}
+
+    # 4. Valid date format?
+    termination_date = termination_date.strip() if termination_date else ""
+    try:
+        term_date = datetime.strptime(termination_date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return {"success": False,
+                "error": "Invalid termination date format."}
+
+    # 5. Within lease period?
+    cv = lease.get("current_values") or {}
+    start_str = cv.get("lease_start_date")
+    end_str = cv.get("lease_end_date")
+    if not start_str or not end_str:
+        return {"success": False,
+                "error": "Lease is missing start or end date."}
+    try:
+        start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"success": False,
+                "error": "Lease has invalid start or end date."}
+
+    if not (start_date <= term_date <= end_date):
+        return {"success": False,
+                "error": "Termination date must be between the lease "
+                         "start date and end date."}
+
+    # Build record
+    record = {
+        "id": str(uuid.uuid4()),
+        "lease_id": lease_id,
+        "termination_date": termination_date,
+        "terminated_at": datetime.utcnow().isoformat(),
+        "terminated_by": "landlord",
+        "note": note.strip() if note and note.strip() else None,
+    }
+
+    # Persist
+    data = _load_all_terminations()
+    data["terminations"].append(record)
+    if not _save_termination_file(data):
+        return {"success": False,
+                "error": "Failed to save termination data."}
+
+    return {"success": True, "termination": record}
+
+
 def generate_tenant_token(lease_group_id):
     """Generate a new tenant access token for a lease group.
 
@@ -2397,6 +2472,32 @@ def index():
             lease["_attention_count"] = attention_count
             lease["_attention_items"] = get_lease_attention_items(lgid, all_confirmations, all_events) if attention_count > 0 else []
 
+            # Lifecycle state for dashboard card
+            # Priority: TERMINATED > EXPIRED > ACTIVE
+            # Only the current version can show a lifecycle ribbon.
+            is_current = lease.get("is_current", False)
+
+            termination = get_termination_for_lease(lease.get("id"))
+            is_terminated = is_current and termination is not None
+            lease["_is_terminated"] = is_terminated
+            lease["_termination_date_display"] = format_date_filter(termination["termination_date"]) if is_terminated else None
+            lease["_termination_days_elapsed"] = (datetime.utcnow().date() - datetime.strptime(termination["termination_date"], "%Y-%m-%d").date()).days if is_terminated else None
+
+            # Expired: current version, past end date, NOT terminated
+            is_expired = False
+            if is_current and not is_terminated:
+                end_date_str = cv.get("lease_end_date")
+                if end_date_str:
+                    try:
+                        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                        is_expired = end_date < datetime.utcnow().date()
+                    except ValueError:
+                        pass
+            lease["_is_expired"] = is_expired
+
+            # Can renew: terminated OR expired (not active)
+            lease["_can_renew"] = is_terminated or is_expired
+
         grouped_leases = group_leases_by_lessor(leases)
         global_alerts = get_global_alerts(leases)
         return render_template("index.html",
@@ -2434,6 +2535,40 @@ def index():
         lease_data = None
 
     reminder_status = calculate_reminder_status(lease_data)
+
+    # Attach lifecycle data for lease detail view
+    # Priority: TERMINATED > EXPIRED > ACTIVE
+    # Mirrors dashboard enrichment for full parity.
+    if lease_data:
+        is_current = lease_data.get("is_current", False)
+        termination = get_termination_for_lease(lease_data.get("id"))
+        lease_data["_termination"] = termination
+
+        # Terminated: current version + termination record exists
+        is_terminated = is_current and termination is not None
+        lease_data["_is_terminated"] = is_terminated
+        lease_data["_termination_date_display"] = format_date_filter(termination["termination_date"]) if is_terminated else None
+        lease_data["_termination_days_elapsed"] = (datetime.utcnow().date() - datetime.strptime(termination["termination_date"], "%Y-%m-%d").date()).days if is_terminated else None
+
+        # Expired: current version, past end date, NOT terminated
+        is_expired = False
+        expiry_date_display = None
+        if is_current and not is_terminated:
+            cv = lease_data.get("current_values") or {}
+            end_date_str = cv.get("lease_end_date")
+            if end_date_str:
+                try:
+                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                    if end_date < datetime.utcnow().date():
+                        is_expired = True
+                        expiry_date_display = format_date_filter(end_date_str)
+                except ValueError:
+                    pass
+        lease_data["_is_expired"] = is_expired
+        lease_data["_expiry_date_display"] = expiry_date_display
+
+        # Can renew: terminated OR expired (not active)
+        lease_data["_can_renew"] = is_terminated or is_expired
 
     # Get lease versions for history display
     lease_versions = []
@@ -3179,6 +3314,27 @@ def reset_lease():
         else:
             flash("Lease version deleted successfully.", "success")
             return redirect(url_for("index"))
+
+
+@app.route("/lease/<lease_id>/terminate", methods=["POST"])
+def terminate_lease(lease_id):
+    """Record an early termination for a lease version."""
+    termination_date = request.form.get("termination_date", "").strip()
+    note = request.form.get("termination_note", "").strip()
+
+    if not termination_date:
+        flash("Termination date is required.", "error")
+        return redirect(url_for("index", lease_id=lease_id))
+
+    result = create_termination_event(lease_id, termination_date,
+                                      note=note or None)
+
+    if result.get("success"):
+        flash("Lease termination recorded.", "success")
+    else:
+        flash(result.get("error", "An unexpected error occurred."), "error")
+
+    return redirect(url_for("index", lease_id=lease_id))
 
 
 @app.route("/ai_prefill", methods=["POST"])

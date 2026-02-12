@@ -12,6 +12,45 @@ For planned future work, see ACTIVE_ROADMAP.md.
 
 ----------------------------------------------------------------
 
+    2026-02-12  Termination UI + Lifecycle Extension
+
+      Built the full termination creation UI and extended the
+      lifecycle model across both dashboard and lease detail views.
+
+      What was built:
+      - create_termination_event() function with 5 validations
+        (lease exists, is current, not already terminated, valid date,
+        date within lease period)
+      - POST /lease/<lease_id>/terminate route
+      - Confirmation modal with date picker and optional note
+      - Dashboard: TERMINATED and EXPIRED amber ribbons (full-width)
+      - Dashboard: running ticker (days elapsed) for both states
+      - Dashboard: primary Renew button when _can_renew is True
+      - Lease detail: Reminders ticker as sole lifecycle indicator
+        (amber urgency-lifecycle styling for terminated/expired)
+      - Lease detail: Renew button replaces Rent Payment section
+        when _can_renew is True; reverts to normal after renewal
+      - Route enrichment (full parity between dashboard and detail):
+        _is_terminated, _termination_date_display,
+        _termination_days_elapsed, _is_expired,
+        _expiry_date_display, _can_renew
+
+      Locked design decisions:
+      - Version-level only (tied to lease_id, not lease_group_id)
+      - Permanent and append-only — no undo, no edit
+      - Effective date chosen by landlord (not assumed to be today)
+      - lease_data.json is never modified
+      - get_governing_lease_for_month() unchanged
+      - Templates never compute lifecycle logic — routes attach
+        pre-computed underscore-prefixed values
+      - Lifecycle priority: TERMINATED > EXPIRED > ACTIVE
+      - Dashboard ribbon + ticker apply only when CURRENT version
+        qualifies; disappear after renewal
+      - Amber colour scheme (warm, not alarming) for all lifecycle UI
+      - Dead CSS removed: .termination-banner, .termination-banner-title,
+        .termination-banner-detail, .lease-card-expiry-terminated
+
+
 ----------------------------------------------------------------
 
   2026-02-11  Dashboard attention badges (Phase 1)

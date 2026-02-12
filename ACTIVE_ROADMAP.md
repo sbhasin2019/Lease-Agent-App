@@ -65,23 +65,6 @@ Status: NOT STARTED
 
 ----------------------------------------------------------------
 
-Termination UI (Stage B Completion)
-Status: PARTIALLY BUILT
-
-  What exists:
-  - termination_data.json with load/save functions
-  - get_termination_for_lease() lookup
-  - get_governing_lease_for_month() consumes termination data
-
-  What remains:
-  - create_termination_event() function
-  - Landlord UI route and form to record a termination
-  - Validation (termination date within lease period, etc.)
-  - Visual indication on dashboard or lease view that a lease
-    was terminated early
-
-----------------------------------------------------------------
-
 Residual CSS Cleanup
 Status: NOT STARTED
 
