@@ -318,12 +318,13 @@ RENT ESCALATION RULES:
 
 LEASE NICKNAME RULES:
 - Generate a short, human-friendly nickname (2-6 words)
-- Prefer format: "[Location/Building] – [Type] [Unit#]" when unit number is available
-- Include flat/unit/apartment number if clearly stated in the document (e.g., "Flat 401", "Unit 12B")
-- Good examples: "Bandra West – Flat 302", "DLF Phase 3 – Office 5A", "Prestige Tower – Apartment 1201"
-- If no unit number found, omit it: "Bandra West – Apartment", "Prestige Tower – Commercial"
+- Prefer format: "City - Condo/Locality Name - Apartment/House Number"
+- Include flat/unit/apartment number if clearly stated in the document
+- Good examples: "Gurgaon - World Spa - A5-102", "Mumbai - Prestige Tower - 1201", "Bangalore - DLF Phase 3 - 5A"
+- If no unit number found, omit it: "Mumbai - Prestige Tower", "Gurgaon - World Spa"
+- If city is unclear but building is known: "World Spa - A5-102"
 - If location is unclear, use generic fallback: "Residential Lease" or "Commercial Lease"
-- Only include unit numbers explicitly mentioned in the document — NEVER guess or hallucinate
+- Only include details explicitly mentioned in the document — NEVER guess or hallucinate
 - If you cannot determine ANY useful identifying info, use null
 
 Return ONLY valid JSON matching this exact schema (no other text):
@@ -2422,6 +2423,7 @@ def compare_lease_versions(current_lease, previous_lease):
 @app.route("/")
 def index():
     """Display the main page or dashboard."""
+    global uploads
     lease_id = request.args.get("lease_id")
     edit_mode = request.args.get("edit") == "true"
     new_lease = request.args.get("new") == "true"
@@ -2434,6 +2436,14 @@ def index():
     # Dashboard-first: if no lease_id specified, show dashboard
     # Unless ?new=true is specified (show upload form)
     if not lease_id and not new_lease:
+        # Clean up abandoned renewal drafts before showing dashboard
+        all_data = _load_all_leases()
+        original_leases = all_data.get("leases", [])
+        cleaned_leases = cleanup_draft_leases(original_leases)
+        if len(cleaned_leases) != len(original_leases):
+            all_data["leases"] = cleaned_leases
+            _save_lease_file(all_data)
+
         # Dashboard shows only current versions (not old renewals)
         leases = get_all_leases(current_only=True)
 
@@ -2464,6 +2474,7 @@ def index():
             thread_data = _load_all_threads()
 
         for lease in leases:
+            cv = lease.get("current_values", lease)
             lgid = lease.get("lease_group_id", lease.get("id"))
             attention_count = count_landlord_attention_threads(lgid, thread_data)
             lease["_needs_attention"] = attention_count > 0
@@ -2511,6 +2522,10 @@ def index():
                                renew_from_lease=None,
                                return_attention_for=return_attention_for,
                                payment_threads_by_month={})
+
+    # Clear stale in-memory upload data so upload page renders clean
+    if new_lease:
+        uploads = {}
 
     # Get all leases for sidebar/navigation (current only)
     leases = get_all_leases(current_only=True)
@@ -2603,6 +2618,11 @@ def index():
         materialise_system_threads(lease_group_id)
         thread_data = _load_all_threads()
         lease_threads = get_threads_for_lease_group(lease_group_id, thread_data)
+
+        # Attention data for lease detail view (mirrors dashboard enrichment)
+        attention_count = count_landlord_attention_threads(lease_group_id, thread_data)
+        lease_data["_attention_count"] = attention_count
+        lease_data["_attention_items"] = get_attention_summary_for_lease(lease_group_id, thread_data) if attention_count > 0 else []
 
         # Build payment lookup for timeline enrichment
         payment_lookup = {
@@ -2871,6 +2891,7 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload_file():
     """Handle file upload."""
+    global uploads
     if "file" not in request.files:
         flash("No file selected", "error")
         return redirect(url_for("index"))
@@ -3034,6 +3055,9 @@ def upload_file():
         flash(flash_msg, "success")
     else:
         flash("Lease uploaded. Text extraction failed - please fill in details manually.", "success")
+
+    # Clear in-memory upload data (already persisted to lease_data.json)
+    uploads = {}
 
     # Redirect to new lease in edit mode
     return redirect(url_for("index", lease_id=new_lease_id, edit="true"))

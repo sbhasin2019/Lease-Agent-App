@@ -479,7 +479,8 @@ Template safety:
 - Templates must NOT compute business logic.
 - All derived values are attached in routes via underscore-prefixed
   keys (e.g. _earliest_start_date, _tenant_continuity,
-  _needs_attention, _is_terminated, _is_expired, _can_renew,
+  _needs_attention, _attention_count, _attention_items,
+  _is_terminated, _is_expired, _can_renew,
   _termination_date_display, _termination_days_elapsed,
   _expiry_date_display).
 - Helper functions must NEVER reload JSON — always accept
@@ -488,6 +489,19 @@ Template safety:
 Dashboard caching:
 - The dashboard route uses a versions_cache dict to call
   get_lease_versions at most ONCE per unique lease_group_id.
+- The dashboard route has TWO loops over leases. The first loop
+  computes version history and materialises threads. The second
+  loop computes attention and lifecycle state. Both loops must
+  independently read cv = lease.get("current_values", lease) —
+  the variable does NOT carry across loops.
+
+Upload state cleanup:
+- The global uploads={} dict holds in-memory upload state during
+  file processing. It is cleared at two points:
+  1. At the end of upload_file() before redirect (data is persisted)
+  2. At the start of index() when new_lease=True (clean upload page)
+- cleanup_draft_leases() runs at the start of the dashboard branch
+  to restore previous versions when abandoned renewal drafts exist.
 
 ----------------------------------------------------------------
 UX PRINCIPLES
@@ -501,7 +515,7 @@ Dashboard cards are calm summaries:
 - Expiry is informational (days + date), not alarming
 - Lifecycle ribbons: TERMINATED or EXPIRED (amber, full-width)
   appear only when the CURRENT version qualifies
-- Primary Renew button appears when _can_renew is True
+- Primary "Add Renewal Lease" button appears when _can_renew is True
 - Lifecycle priority: TERMINATED > EXPIRED > ACTIVE
 
 Monthly summaries default to collapsed:
@@ -530,6 +544,15 @@ AI autofill:
   appears instead (does not re-run AI or incur cost)
 - Inline field explanations show provenance: "Suggested by AI",
   "Changed by you", "Entered by you", etc.
+- Lease nickname AI format: "City - Condo/Locality Name -
+  Apartment/House Number" (e.g. "Gurgaon - World Spa - A5-102")
+
+Attention in lease detail view:
+- "Needs attention" button appears in the lease detail header
+  (right-aligned, same row as "Lease Details" heading)
+- Only shown when _attention_count > 0
+- Opens the same attention modal as dashboard cards
+- Uses openAttentionModal() / closeAttentionModal() JS functions
 
 ----------------------------------------------------------------
 TECH STACK

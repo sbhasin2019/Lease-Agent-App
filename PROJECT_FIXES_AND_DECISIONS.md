@@ -12,6 +12,78 @@ For planned future work, see ACTIVE_ROADMAP.md.
 
 ----------------------------------------------------------------
 
+  2026-02-13  Session 2 — Dashboard and lease detail fixes
+
+    Bug fix — stale cv variable in dashboard enrichment:
+      The dashboard route had two separate for-loops over leases.
+      The first loop set cv = lease.get("current_values", lease)
+      for tenant continuity computation. The second loop (attention
+      + lifecycle enrichment) reused the same cv variable, which
+      still pointed to the LAST lease from the first loop. This
+      caused _is_expired and _can_renew to always evaluate against
+      the wrong lease's end date. Fixed by re-reading cv at the
+      start of the second loop.
+
+      Impact: expired leases did not show the EXPIRED ribbon or
+      "Add Renewal Lease" button on dashboard cards.
+
+    Bug fix — abandoned renewal draft hiding dashboard:
+      When a renewal upload was started but not saved, the draft
+      lease (is_current=True, status=draft) caused the original
+      lease to become is_current=False. The dashboard filter
+      (current_only=True) returned zero leases, showing "Upload
+      your first lease" empty state. Fixed by calling
+      cleanup_draft_leases() at the start of the dashboard branch.
+
+    Bug fix — stale upload data persisting across page loads:
+      The global in-memory uploads={} dict was populated during
+      upload_file() but never cleared. When navigating to the
+      upload page, stale extracted text and form fields from the
+      previous upload appeared. Fixed by:
+      - Clearing uploads={} at end of upload_file() before redirect
+      - Clearing uploads={} when new_lease=True in index() route
+      Both required moving "global uploads" to the top of each
+      function to avoid SyntaxError.
+
+    Feature — attention button in lease detail view:
+      Added "Needs attention" button to lease detail header
+      (flex row alongside "Lease Details" heading). Only visible
+      when _attention_count > 0. Opens the same attention modal
+      pattern as dashboard cards. Backend enrichment added:
+      _attention_count and _attention_items computed after thread
+      materialisation in the lease detail branch.
+
+    CSS fix — attention badge overlapping lease nickname:
+      Added padding-right: 120px to .lease-card-title to reserve
+      space for the absolutely-positioned attention badge on
+      dashboard cards.
+
+    CSS fix — urgency-lifecycle banner not visibly amber:
+      Changed .reminder-item.urgency-lifecycle background from
+      #fefce8 (barely-visible pale yellow) to #fde68a (amber-200,
+      clearly amber). Matches the amber theme of dashboard ribbons.
+
+    AI prompt update — lease nickname format:
+      Updated LEASE NICKNAME RULES in ai_extract_lease_fields()
+      from "[Location/Building] – [Type] [Unit#]" format to
+      "City - Condo/Locality Name - Apartment/House Number".
+      Examples: "Gurgaon - World Spa - A5-102", "Mumbai - Prestige
+      Tower - 1201". Previous format produced names like
+      "Bandra West – Flat 302".
+
+    UI text — "Renew Lease" → "Add Renewal Lease":
+      Changed button text on both dashboard cards and lease detail
+      view from "Renew Lease" to "Add Renewal Lease" for clarity.
+
+    Attempted and reverted — AI preview modal "View changes" button:
+      Added a "View changes from previous lease" button to the AI
+      autofill preview modal for renewal leases. Removed after
+      recognising that the changesModal compares saved form values
+      vs previous lease, but at AI preview time the form hasn't
+      been saved yet, making the comparison meaningless.
+
+----------------------------------------------------------------
+
   2026-02-13  Legacy Event System Removal (Phase 5)
 
     Completed the migration from landlord_review_data.json to
