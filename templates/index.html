@@ -2703,9 +2703,11 @@
                             <ul class="attention-list">
                                 {% for item in lease._attention_items %}
                                 <li class="attention-item">
-                                    <span class="attention-item-month">{{ item.month_name }} {{ item.year }}</span>
+                                    <span class="attention-item-month">{{ item.display_label }}</span>
                                     <span class="attention-item-reason">{{ item.reason }}</span>
-                                    <a href="/?lease_id={{ lease.id }}&open_month={{ item.year }}-{{ '%02d' | format(item.month) }}&return_to=attention" class="attention-item-view">View</a>
+                                    {% if item.open_month %}
+                                    <a href="/?lease_id={{ lease.id }}&open_month={{ item.open_month }}&return_to=attention" class="attention-item-view">View</a>
+                                    {% endif %}
                                 </li>
                                 {% endfor %}
                             </ul>
@@ -3208,113 +3210,6 @@
                     </div>
                     {% endif %}
 
-                    {# ---- LANDLORD REVIEW / CONVERSATION BLOCK (Phase 2) ---- #}
-                    {% set pc_events = payment_events.get(pc.id, []) %}
-                    {% set convo = payment_conversation.get(pc.id, {"open": False, "thread": []}) %}
-
-                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #d1d5db;">
-
-                    {# ---- Event timeline ---- #}
-                    {% if pc_events %}
-                    <div style="margin-bottom: 10px;">
-                        <span style="font-size: 0.85em; color: #777;">Review history</span>
-                        {% for ev in pc_events %}
-                        <div style="margin-top: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#f9fafb{% endif %}; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85em;{% if ev.event_type in ('acknowledged', 'noted') %} opacity: 0.75;{% endif %}{# noted kept for historical data #}">
-                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                {% if ev.actor == 'tenant' %}
-                                <span style="background: #dbeafe; color: #1e40af; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Tenant</span>
-                                {% else %}
-                                <span style="background: #f3f4f6; color: #374151; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Landlord</span>
-                                {% endif %}
-                                {% if ev.event_type in ('acknowledged', 'noted') %}
-                                <span style="background: #d1fae5; color: #065f46; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Acknowledged</span>
-                                {% elif ev.event_type == 'flagged' %}
-                                <span style="background: #fef3c7; color: #92400e; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Flagged</span>
-                                {% elif ev.event_type == 'response' %}
-                                <span style="background: #e0e7ff; color: #3730a3; font-size: 0.8em; padding: 1px 6px; border-radius: 8px;">Reply</span>
-                                {% endif %}
-                                <span style="color: #999; font-size: 0.85em;">{{ ev.created_at[:16]|replace('T', ' ') if ev.created_at else '' }}</span>
-                            </div>
-                            {% if ev.message %}
-                            <div style="margin-top: 4px; color: #555;">{{ ev.message }}</div>
-                            {% endif %}
-                            {% if ev.attachments %}
-                            <div style="margin-top: 4px;">
-                                {% for att in ev.attachments %}
-                                {% set att_filename = att.split('/')[-1] %}
-                                <a href="{{ url_for('view_proof', lease_group_id=pc.lease_group_id, filename=att_filename) }}" target="_blank" style="color: #2563eb; font-size: 0.85em;">{{ att_filename }}</a>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
-                    {# ---- Actions depend on conversation state ---- #}
-                    {% if convo.open %}
-                    {# ---- CONVERSATION OPEN: Reply + Close actions ---- #}
-                    <div style="margin-top: 8px;">
-                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-bottom: 0;">
-                            <input type="hidden" name="review_type" value="response">
-                            <div style="margin-bottom: 4px;">
-                                <label style="font-size: 0.8em; color: #555; margin-bottom: 2px; display: block;">Reply to tenant</label>
-                                <textarea name="internal_note" rows="1" class="reply-box" placeholder="Type your reply..." required style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
-                            </div>
-                            <div style="margin-bottom: 4px;">
-                                <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
-                                <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
-                            </div>
-                            <button type="submit" style="background: #2563eb; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Send reply</button>
-                        </form>
-
-                        <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0 4px 0;">
-                            <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
-                            <span style="font-size: 0.75em; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em;">or</span>
-                            <hr style="flex: 1; border: none; border-top: 1px solid #e5e7eb; margin: 0;">
-                        </div>
-
-                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" style="margin: 0; text-align: center;">
-                            <input type="hidden" name="review_type" value="acknowledged">
-                            <button type="submit" style="background: #d1fae5; color: #065f46; border: 1px solid #86efac; padding: 5px 12px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">Acknowledge &mdash; no further action needed</button>
-                        </form>
-                    </div>
-
-                    {% else %}
-                    {# ---- NO OPEN CONVERSATION: Standard review form ---- #}
-                    <details style="margin-top: {% if pc_events %}6{% else %}0{% endif %}px;">
-                        <summary style="font-size: 0.8em; color: #2563eb; cursor: pointer;">Review this submission</summary>
-                        <p style="font-size: 0.8em; color: #999; margin: 6px 0 8px 0;">
-                            Once a note is saved, it can't be changed or removed.
-                            If you need to add more context later, just add another note — the most recent one will appear first.
-                        </p>
-                        <form method="POST" action="{{ url_for('submit_payment_review', lease_group_id=pc.lease_group_id, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-top: 8px;">
-                            <div style="margin-bottom: 8px;">
-                                <label style="font-size: 0.85em; color: #555; display: block; margin-bottom: 4px;">Review type</label>
-                                <select name="review_type" required onchange="toggleFlagWarning(this)" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em;">
-                                    <option value="acknowledged">Acknowledge</option>
-                                    <option value="flagged">Raise a flag</option>
-                                </select>
-                                <div style="font-size: 0.8em; color: #777; margin-top: 4px; line-height: 1.5;">
-                                    Acknowledge — no further action required<br>
-                                    Raise a flag — shown to the tenant (comment required)
-                                </div>
-                            </div>
-                            <div style="margin-bottom: 4px;">
-                                <label style="font-size: 0.8em; color: #555; margin-bottom: 2px; display: block;">Note</label>
-                                <textarea name="internal_note" rows="1" class="reply-box" placeholder="Add a note..." style="width: 100%; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
-                                <span class="flag-warning" style="display: none; font-size: 0.8em; color: #92400e; margin-top: 4px;">This message will be shown to the tenant.</span>
-                            </div>
-                            <div style="margin-bottom: 8px;">
-                                <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
-                                <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
-                            </div>
-                            <button type="submit" style="background: #374151; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; cursor: pointer;">Save review</button>
-                        </form>
-                    </details>
-                    {% endif %}
-
-                    </div>
 
                 </div>
                 {% endfor %}
@@ -3335,32 +3230,34 @@
                              data-thread-year="{{ ms.year }}">
                             <div class="payment-thread-header">
                                 <span class="payment-thread-type">{{ thread.payment_type_display }}</span>
-                                <span class="payment-thread-status">{{ thread.status_display }}</span>
+                                <span class="payment-thread-status">
+                                    {% if thread.status == 'resolved' %}Resolved
+                                    {% elif thread.waiting_on == 'landlord' %}Needs your action
+                                    {% elif thread.waiting_on == 'tenant' %}Awaiting tenant response
+                                    {% endif %}
+                                </span>
                             </div>
                             <ul class="payment-thread-timeline">
                                 {% for entry in thread.timeline %}
-                                <li class="timeline-entry{% if entry.entry_type == 'submission' and not entry.is_latest %} timeline-entry-earlier{% endif %}">
+                                <li class="timeline-entry">
                                     {% if entry.entry_type == 'submission' %}
                                         Tenant submitted ₹{{ entry.amount_declared|format_money }}
                                         <span class="timeline-entry-date">on {{ entry.timestamp|format_date }}</span>
-                                        {% if entry.is_latest and thread.submission_count > 1 %}
-                                            <span class="timeline-entry-label">Latest</span>
-                                        {% elif not entry.is_latest %}
-                                            <span class="timeline-entry-label">Earlier submission</span>
-                                        {% endif %}
                                     {% elif entry.entry_type == 'event' %}
-                                        {% if entry.event_type == 'acknowledged' %}
+                                        {% if entry.message_type == 'acknowledge' %}
                                             Landlord acknowledged
-                                        {% elif entry.event_type == 'flagged' %}
+                                        {% elif entry.message_type == 'flag' %}
                                             Landlord flagged
-                                        {% elif entry.event_type == 'response' and entry.actor == 'tenant' %}
+                                        {% elif entry.message_type == 'reply' and entry.actor == 'tenant' %}
                                             Tenant replied
-                                        {% elif entry.event_type == 'response' and entry.actor == 'landlord' %}
+                                        {% elif entry.message_type == 'reply' and entry.actor == 'landlord' %}
                                             Landlord replied
+                                        {% elif entry.message_type == 'reminder' %}
+                                            Landlord sent reminder
                                         {% endif %}
                                         <span class="timeline-entry-date">on {{ entry.timestamp|format_date }}</span>
-                                        {% if entry.message %}
-                                            <span class="timeline-entry-message">"{{ entry.message }}"</span>
+                                        {% if entry.body %}
+                                            <span class="timeline-entry-message">"{{ entry.body }}"</span>
                                         {% endif %}
                                     {% endif %}
                                 </li>

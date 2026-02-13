@@ -12,6 +12,130 @@ For planned future work, see ACTIVE_ROADMAP.md.
 
 ----------------------------------------------------------------
 
+  2026-02-13  Legacy Event System Removal (Phase 5)
+
+    Completed the migration from landlord_review_data.json to
+    threads.json by removing ALL legacy event-based code.
+
+    Functions deleted (9 total):
+    - _load_all_landlord_reviews — I/O for landlord_review_data.json
+    - _save_landlord_review_file — atomic write for old file
+    - _normalize_event — schema migration shim (reviewed_at→created_at,
+      review_type→event_type, internal_note→message)
+    - get_events_for_lease_group — query events by lease group
+    - get_events_for_payment — query events by payment ID
+    - get_conversation_state — derive open/closed from event sequence
+    - compute_lease_attention_count — count attention months from events
+    - get_lease_attention_items — list attention items from events
+    - build_payment_threads — build ephemeral thread display from events
+
+    Template cleanup:
+    - Removed legacy review/conversation block from index.html
+      (landlord per-payment view): event timeline, reply form,
+      acknowledge button, review form — all based on payment_events
+      and payment_conversation variables
+    - Removed legacy conversation block from tenant_confirm.html:
+      payment_conversation lookup, event_type filtering, reply form
+    - Removed payment_events={} and payment_conversation={} from
+      both render_template calls
+
+    Other cleanup:
+    - Removed landlord_review_data.json from .gitignore
+    - Added architecture comment at top of thread helper section
+    - landlord_review_data.json file did not exist (no deletion needed)
+
+    No migration was performed. All data at switchover time was
+    test data. materialise_system_threads() creates threads for
+    existing unthreaded payments on first dashboard load.
+
+    Edge case found during cleanup: tenant_confirm.html still
+    referenced payment_conversation and event_type in a hidden
+    storage section. This would have crashed after removing the
+    empty dict pass-throughs. Caught by global search verification.
+
+    Verified: dashboard, lease detail, tenant page all return 200.
+    Full flow tested: flag → tenant reply → acknowledge. Attention
+    badges update correctly. No landlord_review_data.json created.
+
+----------------------------------------------------------------
+
+  2026-02-13  Unified Thread-Based Communication Model (Architecture + Implementation)
+
+    Replaced fragmented attention/review/reminder logic with a
+    single thread-based communication engine. Design locked
+    2026-02-13. Implementation completed same day for
+    payment_review threads. Legacy event system fully removed.
+
+    What was replaced:
+    - landlord_review_data.json (flat event records, implicit
+      conversation state via get_conversation_state())
+    - Event-based attention badge (compute_lease_attention_count,
+      get_lease_attention_items — counted months, not threads)
+    - Ephemeral thread computation (build_payment_threads —
+      grouped payments by category with computed status)
+    - Planned-but-unbuilt separate systems: reminder_data.json,
+      renewal intent prompts with dashboard_prefs.json suppression
+
+    What replaces it:
+    - Single file: threads.json containing threads[] and messages[]
+    - Explicit thread objects with stored status (open/resolved)
+      and waiting_on (landlord/tenant/null) — never inferred
+    - Four thread types: payment_review, missing_payment,
+      renewal, general
+    - Lazy thread creation via materialise_system_threads()
+      called from dashboard route — no background workers
+    - Auto-resolution (e.g. payment submitted → missing_payment
+      thread resolves)
+    - External channel fields (channel, delivered_via, external_ref)
+      built into schema from day one, defaulting to "internal"
+
+    Implementation phases completed:
+    - Phase 1: Foundation (load/save, query helpers, write helpers,
+      materialise_system_threads)
+    - Phase 2: Write path switchover (submit_payment_review,
+      tenant_payment_response)
+    - Phase 3: Read path switchover (dashboard, attention modal,
+      lease detail, tenant page)
+    - Phase 4: Skipped — auto-resolution hooks for missing_payment
+      and renewal threads deferred until those thread types exist
+    - Phase 5: Legacy removal (9 functions deleted, templates
+      cleaned, render_template calls cleaned, .gitignore updated)
+
+    Architectural constraints enforced during implementation:
+    - Single Load / Single Save: each write helper loads once at
+      top, saves once at end
+    - Write helpers are independent: none calls another write helper
+    - Read helpers are strictly read-only: never call _save_threads_file
+    - Read helpers accept optional thread_data to avoid repeated
+      disk reads
+    - No new builder/abstraction functions for lease detail —
+      thread data used directly inline
+    - Explicit waiting_on transitions, never inferred from
+      message order
+
+    Key design decisions locked:
+    - Coverage (monthly summary) is informational only — never
+      creates threads, never triggers attention badge
+    - Threads are the actionable layer — only open threads where
+      waiting_on == "landlord" are counted in attention badge
+    - payment_review threads created only on tenant submission
+      (landlord flagging is a message inside existing thread)
+    - Idempotency checks open threads only — resolved threads
+      never block new thread creation
+    - Tenant submission route writes ONLY to payment_data.json;
+      thread creation happens lazily on dashboard load
+    - 7-day nudge is a computed display prompt, not a stored
+      message; does not change waiting_on or inflate badge
+    - Nudge display: primary in thread view (per-category modal),
+      secondary in attention modal under "Follow-ups (Optional)"
+    - Tenant visibility: sees payment_review, missing_payment,
+      general threads; sees submission, flag, reply, reminder
+      messages; does NOT see nudge or acknowledge messages
+    - No migration from landlord_review_data.json — clean cut
+      on test data; materialisation handles existing payments
+
+----------------------------------------------------------------
+
     2026-02-12  Termination UI + Lifecycle Extension
 
       Built the full termination creation UI and extended the
@@ -72,13 +196,14 @@ For planned future work, see ACTIVE_ROADMAP.md.
     Attention Overview modal: clicking the badge opens a modal
     listing affected months with reasons and "View" links.
 
-    Helper functions:
-    - compute_lease_attention_count() — returns int
-    - get_lease_attention_items() — returns list of month items
+    Original helper functions (now deleted — replaced by thread model):
+    - compute_lease_attention_count() — replaced by
+      count_landlord_attention_threads()
+    - get_lease_attention_items() — replaced by
+      get_attention_summary_for_lease()
 
-    Dashboard route loads payment + review data once (not per-lease)
-    and passes computed _needs_attention / _attention_count to
-    each lease dict.
+    Dashboard route now uses materialise_system_threads() +
+    thread-based attention helpers instead of loading review data.
 
   ----------------------------------------------------------------
 
@@ -88,20 +213,22 @@ For planned future work, see ACTIVE_ROADMAP.md.
     thread view. One thread per payment type (Rent / Maintenance /
     Utilities), each with a merged chronological timeline.
 
-    build_payment_threads() is the canonical grouped model.
-    Action targeting rule: action_payment_id is computed per
-    category — active_conversation_payment_id if it exists,
-    else latest_submission_payment_id. Templates NEVER infer
-    which payment_id to target.
+    Original implementation used build_payment_threads() to compute
+    ephemeral thread objects (now deleted — replaced by persistent
+    threads in threads.json). Action targeting rule:
+    action_payment_id is computed per category —
+    active_conversation_payment_id if it exists, else
+    latest_submission_payment_id. Templates NEVER infer which
+    payment_id to target.
 
     Thread blocks are server-rendered in #payment-thread-view
     (hidden container) and moved into modals alongside legacy
     cards (threads visible, legacy cards hidden). "View full
     history" switches to legacy card view.
 
-    Thread status values: awaiting_landlord, awaiting_tenant,
-    resolved. Status display uses second-person: "Needs your
-    action", "Awaiting tenant response", "Resolved".
+    Thread status values (now derived from thread.status and
+    thread.waiting_on): "Needs your action", "Awaiting tenant
+    response", "Resolved".
 
   ----------------------------------------------------------------
 
@@ -126,8 +253,8 @@ For planned future work, see ACTIVE_ROADMAP.md.
       return_attention_for=lease_id (opens attention overview)
     - Fallback: plain lease detail page
 
-    Uses build_payment_threads() to re-evaluate thread status
-    after the new event is saved.
+    Now uses find_open_thread() to check for remaining open
+    threads (previously used build_payment_threads(), now deleted).
 
   ----------------------------------------------------------------
 
@@ -221,10 +348,11 @@ For planned future work, see ACTIVE_ROADMAP.md.
   the UX. "Noted" had no clear semantic difference from
   "acknowledged" in practice.
 
-  Backward compatibility: Historical "noted" events are
-  normalised to "acknowledged" on read via _normalize_event().
-  The backend still recognises "noted" in the close-conversation
-  check for old data, but the UI never offers it as an action.
+  Backward compatibility (now moot): Historical "noted" events
+  were normalised to "acknowledged" on read via _normalize_event().
+  Both _normalize_event() and the entire landlord_review_data.json
+  architecture have been deleted. No historical "noted" events
+  exist in the current thread-based system.
 
   Also unified status language across the app:
   - "reviewed" → "acknowledged"
@@ -458,8 +586,9 @@ For planned future work, see ACTIVE_ROADMAP.md.
   Monthly submission summary: Groups by (year, month), counts
   all confirmation types together.
 
-  Landlord review system: landlord_review_data.json with
-  append-only event records.
+  Landlord review system: originally landlord_review_data.json
+  with append-only event records. Now replaced by threads.json
+  (see 2026-02-13 entries above).
 
   Token validity decision: is_active == true only. Lease expiry
   does NOT affect token validity. Access control is explicitly
@@ -477,13 +606,16 @@ For planned future work, see ACTIVE_ROADMAP.md.
   threads. Landlords flag with a message, tenants reply, landlords
   reply back or close.
 
-  Schema extended (backward compatible via _normalize_event):
+  Schema extended (backward compatible via _normalize_event,
+  now deleted along with entire event-based system):
   - reviewed_at → created_at
   - review_type → event_type
   - internal_note → message
   - Added: actor ("landlord" | "tenant"), attachments (list)
 
-  Conversation state is computed on read, never stored.
+  Conversation state was computed on read, never stored.
+  This approach has been superseded by explicit thread status
+  and waiting_on fields in threads.json.
 
   Tenant visibility: Only "flagged" and "response" events shown.
   "Acknowledged" events are never visible to tenants.

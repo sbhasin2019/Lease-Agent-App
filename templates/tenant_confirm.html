@@ -413,66 +413,11 @@
                     {{ ["January","February","March","April","May","June","July","August","September","October","November","December"][pc.period_month - 1] if pc.period_month else '?' }}
                     {{ pc.period_year or '' }}
                 </span>
-                {% set convo = payment_conversation.get(pc.id, {"open": False, "thread": []}) %}
-                {% if convo.open %}
-                <span style="background: #fef3c7; color: #92400e; font-size: 0.75em; padding: 2px 8px; border-radius: 10px;">Needs attention</span>
-                {% endif %}
             </div>
             <div style="font-size: 0.9em; color: #555;">
                 Amount paid: <strong>₹{{ "{:,.0f}".format(pc.amount_declared|float) if pc.amount_declared else '—' }}</strong>
                 <span style="color: #999; margin-left: 8px;">{{ pc.submitted_at[:10] if pc.submitted_at else '' }}</span>
             </div>
-
-            {# ---- Conversation thread (tenant-visible events only) ---- #}
-            {% if convo.thread %}
-            <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
-                {% for ev in convo.thread if ev.event_type in ('flagged', 'response') %}
-                <div style="margin-bottom: 6px; padding: 8px 10px; background: {% if ev.actor == 'tenant' %}#f0f9ff{% else %}#fffbeb{% endif %}; border: 1px solid {% if ev.actor == 'tenant' %}#bfdbfe{% else %}#fcd34d{% endif %}; border-radius: 6px; font-size: 0.85em;">
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                        {% if ev.actor == 'tenant' %}
-                        <span style="font-weight: 600; color: #1e40af; font-size: 0.85em;">You</span>
-                        {% else %}
-                        <span style="font-weight: 600; color: #92400e; font-size: 0.85em;">Landlord</span>
-                        {% endif %}
-                        <span style="color: #999; font-size: 0.85em;">{{ ev.created_at[:10] if ev.created_at else '' }}</span>
-                    </div>
-                    {% if ev.message %}
-                    <div style="margin-top: 4px; color: #555;">{{ ev.message }}</div>
-                    {% endif %}
-                    {% if ev.attachments %}
-                    <div style="margin-top: 4px;">
-                        {% for att in ev.attachments %}
-                        {% set att_filename = att.split('/')[-1] %}
-                        <a href="{{ url_for('view_proof', lease_group_id=pc.lease_group_id, filename=att_filename) }}" target="_blank" style="color: #2563eb; font-size: 0.85em;">{{ att_filename }}</a>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-
-                {% if convo.open %}
-                {# ---- Reply form ---- #}
-                <form method="POST" action="{{ url_for('tenant_payment_response', token=token, payment_id=pc.id) }}" enctype="multipart/form-data" style="margin-top: 8px;">
-                    <div style="margin-bottom: 6px;">
-                        <textarea name="message" rows="2" placeholder="Type your reply..." required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical;"></textarea>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                        <label style="font-size: 0.8em; color: #777; display: block; margin-bottom: 2px;">Attachment (optional)</label>
-                        <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.pdf" style="font-size: 0.85em;">
-                    </div>
-                    <p style="font-size: 0.8em; color: #999; margin: 0 0 6px 0;">
-                        Your reply will be saved and shared with your landlord. Previous entries cannot be changed.
-                    </p>
-                    <button type="submit" class="btn" style="margin-top: 0; padding: 6px 16px; font-size: 0.85em;">Send reply</button>
-                </form>
-                {% else %}
-                {# ---- Closed indicator ---- #}
-                <div style="margin-top: 6px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 4px; font-size: 0.85em; color: #166534;">
-                    Acknowledged — no further action required.
-                </div>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
