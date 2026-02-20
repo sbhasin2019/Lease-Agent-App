@@ -41,17 +41,19 @@ Status: COMPLETE (2026-02-13)
   - Smart redirect after review actions
 
   What is NOT yet operational:
-  - missing_payment threads (creation logic not built)
+  - missing_payment threads for maintenance/utilities
+    (rent missing_payment threads are now operational —
+    see ACTIVE_BUILD.md Phases 6-9)
   - renewal threads (creation logic not built)
   - 7-day nudge display (not built)
-  - Auto-resolution hooks (deferred until thread types exist)
+  - Auto-resolution hooks for renewal threads (deferred)
 
   See PROJECT_FIXES_AND_DECISIONS.md for implementation details.
 
 ----------------------------------------------------------------
 
 LV-7.2 Step 7: Missing Payment Threads
-Status: DESIGNED — NOT YET IMPLEMENTED
+Status: PARTIALLY COMPLETE — rent is operational; maintenance/utilities not started
 
   Intent: Targeted reminders for missing payment categories.
   Proactive nudges when expected submissions are overdue.
@@ -68,13 +70,14 @@ Status: DESIGNED — NOT YET IMPLEMENTED
   Previous open questions — now resolved:
   - Storage: threads.json (no separate reminder file)
   - Trigger: calendar-based, materialised on dashboard load
-    - Rent: X days after rent_due_day
+    - Rent: day after rent_due_day (grace period = 2 days)
     - Maintenance/utilities: end of month
     - NOT created if rent_due_day is null
     - First lease month respects lease_start_date
     - Future months never evaluated
   - Where do they surface: attention badge + attention modal
-    (threads where waiting_on == "landlord")
+    + Action Console (threads where needs_landlord_attention
+    == true, set after 2-day grace period)
   - In-app first; external delivery (WhatsApp/email) deferred
     but schema-ready
   - Auto-resolves when matching payment submitted
@@ -118,6 +121,8 @@ Status: DESIGNED — NOT YET IMPLEMENTED
   Current design:
   - Created lazily on dashboard load when lease expiry is
     within configured window and no open renewal thread exists
+  - NOT created if lease has an effective termination date
+    before expiry
   - waiting_on = "landlord"
   - Auto-resolves when renewal lease version created
   - No separate suppression mechanism needed — resolving the
@@ -167,6 +172,46 @@ Status: NOT STARTED
 
 ----------------------------------------------------------------
 
+Action Console — Landlord Dashboard
+Status: IN PROGRESS (Phase 10)
+
+  Intent: Replace the modal-driven attention model with a
+  persistent Action Console panel on the landlord dashboard.
+
+  The dashboard becomes a two-column layout:
+  - Left: lease cards grid (existing, with colour indicators)
+  - Right: persistent Action Console (all attention items)
+
+  Current step: layout + read-only console rendering.
+  Action buttons (reminders, suppression, review) are deferred
+  to Phase 10C.
+
+  See PROJECT_CONTEXT.md → UI ARCHITECTURE — CONTROL CENTRE
+  MODEL for the full architectural specification.
+
+----------------------------------------------------------------
+
+Attention Modal Deprecation
+Status: ACTIVE — PLANNED FOR REMOVAL
+
+  The attention modal (opened via 🙋🏻 badge on lease cards)
+  remains temporarily for backward compatibility.
+
+  It will:
+  - Continue functioning as-is
+  - NOT receive new action buttons
+  - NOT gain new responsibilities
+  - Be removed in a future refactor once the Action Console
+    supports all decision workflows
+
+  Redirect flows (return_attention_for, return_to=attention)
+  remain functional during the transition period.
+
+  Decision date: 2026-02-20.
+  See PROJECT_FIXES_AND_DECISIONS.md for rationale.
+
+----------------------------------------------------------------
+
 DEFERRED ITEMS (No Current Plans)
 ----------------------------------------------------------------
 
@@ -188,6 +233,138 @@ explicit scope approval.
   - Mobile app
   - Product renaming / branding cleanup
   - Automated backup or recovery system
+  - Full professional UI redesign — once core features are
+    complete, rework the entire visual design to look like a
+    polished, professionally-built app. Covers typography,
+    colour system, spacing, component design, and overall
+    visual consistency across all views (dashboard, detail,
+    edit, tenant). This is a comprehensive visual overhaul,
+    not incremental CSS tweaks.
+
+----------------------------------------------------------------
+
+Future Feature — External-Origin Payment Confirmations
+Status: DEFERRED — DOCUMENTATION ONLY
+
+  Intent: Allow rent confirmations to originate from sources
+  other than tenant submission — initially landlord manual
+  confirmation, eventually external communication channels
+  (WhatsApp forwarding, SMS parsing, email ingestion).
+
+  Why deferred (decision 2026-02-18):
+  Implementing a standalone landlord confirmation route now
+  would introduce payment logic, thread resolution logic,
+  duplicate blocking, and tenant submission constraints that
+  will likely need rework once external communications are
+  introduced. The landlord-manual case is a subset of the
+  broader "external-origin confirmation" problem.
+
+  Planned architecture (when implemented):
+  1. External message ingestion layer (WhatsApp/SMS/email)
+  2. Message classification engine
+  3. Proposed payment confirmation action
+  4. Landlord confirmation step (approval before record creation)
+  5. Payment record creation (submitted_via identifies origin)
+  6. Automatic resolution of matching missing_payment threads
+  7. Clear audit trail indicating external-origin event
+
+  Current state (not a gap):
+  - submitted_via field already exists in payment schema
+    with documented values: "tenant_link" | "landlord_manual"
+  - Thread message schema has channel, delivered_via,
+    external_ref fields ready for external sources
+  - Auto-resolution logic is origin-agnostic (resolves when
+    any matching payment exists, regardless of submitted_via)
+  - No code hard-codes "tenant_link" as the only valid source
+
+  What must NOT be done until this feature is scoped:
+  - No landlord confirmation routes
+  - No duplicate blocking between tenant and landlord records
+  - No tenant submission blocking based on landlord actions
+  - No modifications to materialise_system_threads() filtering
+  All rent confirmations must originate from tenant submissions.
+  Landlord review remains limited to acknowledge or flag.
+
+----------------------------------------------------------------
+
+Future Enhancement — Compliance-Grade Audit Logging
+Status: DEFERRED — DOCUMENTATION ONLY
+
+  Intent: If the product ever needs to serve regulatory,
+  legal, or enterprise environments, the thread system may
+  need a formal audit trail of every system-triggered action.
+
+  When this would be necessary:
+  - Regulatory compliance (e.g. rent control authorities
+    requiring proof that reminders were sent on time)
+  - Legal disputes (landlord or tenant contesting whether
+    a reminder was issued or when escalation occurred)
+  - Enterprise clients requiring tamper-evident records
+
+  Current state (not a gap):
+  The system already records key timestamps on each thread:
+  created_at, resolved_at, escalation_started_at,
+  last_reminder_at. Messages between landlord and tenant are
+  stored with timestamps, actor, and message_type. This is
+  sufficient for current use. The enhancement below would
+  add a richer, more granular history if justified.
+
+  Two possible approaches:
+
+  OPTION A — Per-Thread System Event Log
+
+    Add a system_events list inside each thread object.
+    This list would record system-triggered events such as:
+    - missing_payment thread auto-created
+    - reminder automatically sent
+    - escalation triggered
+    - auto-resolution triggered
+    - reminder suppression toggled
+
+    Each event would store:
+    - event_type (string, e.g. "escalation_triggered")
+    - timestamp (ISO format)
+    - optional metadata (e.g. reason, days overdue)
+
+    Messages between users remain in the messages array;
+    system_events is strictly for automated actions.
+
+    Advantage: self-contained lifecycle history inside each
+    thread. Easy to display a thread's full history in the UI.
+
+    Disadvantage: event data is scattered across threads.
+    Harder to query globally (e.g. "show all escalations
+    across all leases last month").
+
+  OPTION B — Append-Only Global Audit File
+
+    Create a separate audit_log.json (or similar).
+    Every system-triggered action appends a new record.
+    Records are NEVER modified or deleted (append-only).
+
+    Each record would include:
+    - thread_id
+    - lease_group_id
+    - event_type
+    - timestamp
+    - relevant metadata
+
+    Advantage: stronger for compliance because it is
+    tamper-evident and centralised. Easy to query, export,
+    or submit as evidence. Natural fit for future migration
+    to a database with write-once semantics.
+
+    Disadvantage: separate file to maintain. Requires
+    cross-referencing with threads.json to reconstruct
+    per-thread history.
+
+  Recommendation:
+  Do not implement either option unless regulatory or
+  enterprise requirements explicitly justify the added
+  complexity. The current timestamp fields are sufficient
+  for normal landlord-tenant operations. If this becomes
+  necessary, Option B is likely the better choice for
+  compliance scenarios.
 
 ----------------------------------------------------------------
 END OF ROADMAP

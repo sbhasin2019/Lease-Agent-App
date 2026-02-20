@@ -5,7 +5,7 @@ A simple local web app to extract and display lease information.
 
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import calendar
 import uuid
@@ -615,6 +615,19 @@ def _load_all_threads():
             data["threads"] = []
         if "messages" not in data:
             data["messages"] = []
+
+        # Backfill thread-level escalation fields
+        migrated = False
+        for t in data["threads"]:
+            if "needs_landlord_attention" not in t:
+                t["needs_landlord_attention"] = False
+                t.setdefault("escalation_started_at", None)
+                t.setdefault("last_reminder_at", None)
+                t.setdefault("auto_reminders_suppressed", False)
+                migrated = True
+        if migrated:
+            _save_threads_file(data)
+
         return data
 
     except json.JSONDecodeError:
@@ -687,10 +700,10 @@ def get_messages_for_thread(thread_id, thread_data=None):
 
 
 def count_landlord_attention_threads(lease_group_id, thread_data=None):
-    """Count open threads where waiting_on == 'landlord'.
+    """Count open threads where needs_landlord_attention == true.
 
-    This is the badge count. Only threads requiring landlord action
-    are counted.
+    This is the badge count. Only escalated or explicitly flagged
+    threads are counted — not all threads waiting on landlord.
 
     Args:
         lease_group_id: str
@@ -702,7 +715,7 @@ def count_landlord_attention_threads(lease_group_id, thread_data=None):
     threads = get_threads_for_lease_group(lease_group_id, thread_data)
     return sum(1 for t in threads
                if t.get("status") == "open"
-               and t.get("waiting_on") == "landlord")
+               and t.get("needs_landlord_attention") is True)
 
 
 def get_attention_summary_for_lease(lease_group_id, thread_data=None):
@@ -733,7 +746,7 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
     threads = get_threads_for_lease_group(lease_group_id, thread_data)
     attention = [t for t in threads
                  if t.get("status") == "open"
-                 and t.get("waiting_on") == "landlord"]
+                 and t.get("needs_landlord_attention") is True]
 
     items = []
     for t in attention:
@@ -778,16 +791,87 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
         else:
             reason = "Needs your attention"
 
-        items.append({
+        item = {
             "thread_id": t["id"],
+            "topic_type": topic_type,
             "display_label": display_label,
             "reason": reason,
             "open_month": open_month,
-        })
+        }
+        # For missing_payment threads, include extra fields for UI display
+        if topic_type == "missing_payment":
+            item["expected_amount"] = t.get("expected_amount")
+            item["expected_due_date"] = t.get("expected_due_date")
+            item["auto_reminders_suppressed"] = t.get("auto_reminders_suppressed", False)
+        items.append(item)
 
     # Sort newest first by open_month (threads without open_month go last)
     items.sort(key=lambda x: x.get("open_month") or "", reverse=True)
     return items
+
+
+# ---------------------------------------------------------------------------
+# Action Console — global attention aggregator
+# ---------------------------------------------------------------------------
+_URGENCY_SORT = {"high": 0, "medium": 1, "normal": 2}
+
+
+def get_global_attention_summary(leases):
+    """Aggregate pre-computed _attention_items across all leases.
+
+    Reads lease["_attention_items"] (already computed by dashboard route).
+    Derives urgency from topic_type + reason. Groups by lease, sorts
+    by urgency. Does NOT re-evaluate thread state or engine logic.
+
+    Args:
+        leases: list of lease dicts with _attention_items already attached
+
+    Returns:
+        dict with lease_groups (list) and total_open_items (int)
+    """
+    lease_groups = []
+    total = 0
+
+    for lease in leases:
+        items = lease.get("_attention_items", [])
+        if not items:
+            continue
+
+        # Derive urgency and re-sort for console (high → medium → normal)
+        console_items = []
+        for item in items:
+            tt = item.get("topic_type", "")
+            reason = item.get("reason", "")
+            if tt == "missing_payment":
+                urgency = "high"
+            elif tt == "payment_review" and reason == "Tenant replied":
+                urgency = "medium"
+            else:
+                urgency = "normal"
+            console_items.append({**item, "urgency_level": urgency})
+
+        console_items.sort(key=lambda x: _URGENCY_SORT.get(
+            x.get("urgency_level", "normal"), 2))
+
+        cv = lease.get("current_values", lease)
+        display_name = (cv.get("lease_nickname")
+                        or cv.get("property_address")
+                        or "Untitled Lease")
+
+        lease_groups.append({
+            "lease_group_id": lease.get("lease_group_id", lease.get("id")),
+            "lease_id": lease.get("id"),
+            "lease_display_name": display_name,
+            "attention_count": len(console_items),
+            "items": console_items,
+        })
+        total += len(console_items)
+
+    # Sort lease groups: group with highest-urgency item first
+    lease_groups.sort(key=lambda g: _URGENCY_SORT.get(
+        g["items"][0].get("urgency_level", "normal"), 2))
+
+    return {"lease_groups": lease_groups, "total_open_items": total}
 
 
 def find_open_thread(lease_group_id, topic_type, topic_ref, thread_data=None):
@@ -872,7 +956,10 @@ def build_thread_timeline(thread_id, thread_data, payment_lookup):
 
 
 def ensure_thread_exists(lease_group_id, topic_type, topic_ref,
-                         waiting_on="landlord"):
+                         waiting_on="landlord",
+                         expected_due_date=None,
+                         expected_amount=None,
+                         is_first_month=None):
     """Return an existing open thread or create a new one.
 
     Checks OPEN threads only. Resolved threads do NOT block creation.
@@ -905,7 +992,17 @@ def ensure_thread_exists(lease_group_id, topic_type, topic_ref,
         "waiting_on": waiting_on,
         "created_at": datetime.now().isoformat(),
         "resolved_at": None,
+        "needs_landlord_attention": False,
+        "escalation_started_at": None,
+        "last_reminder_at": None,
+        "auto_reminders_suppressed": False,
     }
+    if expected_due_date is not None:
+        new_thread["expected_due_date"] = expected_due_date
+    if expected_amount is not None:
+        new_thread["expected_amount"] = expected_amount
+    if is_first_month is not None:
+        new_thread["is_first_month"] = is_first_month
     thread_data["threads"].append(new_thread)
     _save_threads_file(thread_data)
     return new_thread
@@ -934,7 +1031,7 @@ def add_message_to_thread(thread_id, actor, message_type, body,
         thread_id: str
         actor: "landlord" | "tenant" | "system"
         message_type: "submission" | "flag" | "reply" | "reminder"
-                      | "acknowledge" | "nudge"
+                      | "auto_reminder" | "acknowledge" | "nudge"
         body: str | None
         payment_id: str | None
         attachments: list of str | None
@@ -976,7 +1073,17 @@ def add_message_to_thread(thread_id, actor, message_type, body,
         thread["status"] = "resolved"
         thread["waiting_on"] = None
         thread["resolved_at"] = datetime.now().isoformat()
-    # reminder, nudge → no change
+    # reminder, auto_reminder, nudge → no change to waiting_on
+
+    # Sync needs_landlord_attention for payment_review threads only.
+    # missing_payment threads manage this via the escalation pipeline.
+    if thread.get("topic_type") == "payment_review":
+        if thread.get("status") == "resolved":
+            thread["needs_landlord_attention"] = False
+        elif thread.get("status") == "open" and thread.get("waiting_on") == "landlord":
+            thread["needs_landlord_attention"] = True
+        elif thread.get("status") == "open" and thread.get("waiting_on") == "tenant":
+            thread["needs_landlord_attention"] = False
 
     _save_threads_file(thread_data)
     return new_message
@@ -1076,6 +1183,10 @@ def materialise_system_threads(lease_group_id):
             "waiting_on": "landlord",
             "created_at": datetime.now().isoformat(),
             "resolved_at": None,
+            "needs_landlord_attention": True,
+            "escalation_started_at": None,
+            "last_reminder_at": None,
+            "auto_reminders_suppressed": False,
         }
         thread_data["threads"].append(new_thread)
         created = True
@@ -1084,6 +1195,279 @@ def materialise_system_threads(lease_group_id):
         _save_threads_file(thread_data)
 
     return created
+
+
+def materialise_missing_payment_threads(lease_group_id, lease_data):
+    """Lazily create missing_payment threads for overdue unpaid rent.
+
+    For each month from tracking_start_date to today, calls
+    evaluate_missing_payment_status(). If rent is missing and
+    overdue, calls ensure_thread_exists() which handles
+    idempotency (no duplicate open threads).
+
+    Args:
+        lease_group_id: str
+        lease_data: full lease dict (with current_values)
+
+    Returns:
+        bool: True if any threads were created, False otherwise
+    """
+    cv = lease_data.get("current_values") or {}
+
+    if lease_data.get("status") == "draft":
+        return False
+
+    lease_start_str = cv.get("lease_start_date")
+    created_at_str = lease_data.get("created_at")
+    if not lease_start_str:
+        return False
+
+    try:
+        lease_start = datetime.strptime(lease_start_str, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return False
+
+    if created_at_str:
+        try:
+            created_at = datetime.strptime(created_at_str[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            created_at = lease_start
+    else:
+        created_at = lease_start
+
+    tracking_start = max(lease_start, created_at)
+    today = datetime.now().date()
+
+    all_confirmations = _load_all_payments().get("confirmations", [])
+
+    y, m = tracking_start.year, tracking_start.month
+    created = False
+
+    while (y, m) <= (today.year, today.month):
+        result = evaluate_missing_payment_status(
+            lease_data, y, m, today,
+            payment_confirmations=all_confirmations
+        )
+
+        if result["should_create_thread"]:
+            topic_ref = f"rent:{y}-{str(m).zfill(2)}"
+            ensure_thread_exists(
+                lease_group_id,
+                "missing_payment",
+                topic_ref,
+                waiting_on="tenant",
+                expected_due_date=result["expected_due_date"].isoformat(),
+                expected_amount=result["expected_amount"],
+                is_first_month=result["is_first_month"],
+            )
+            created = True
+
+        if m == 12:
+            y += 1
+            m = 1
+        else:
+            m += 1
+
+    return created
+
+
+def auto_resolve_missing_payment_threads():
+    """Resolve open missing_payment threads where rent has been submitted.
+
+    Loads threads.json and payment_data.json once. For each open
+    missing_payment thread, checks if a matching rent confirmation
+    exists. If so, resolves the thread.
+
+    Single load at top, single save at end (only if any resolved).
+
+    Returns:
+        bool: True if any threads were resolved, False otherwise
+    """
+    thread_data = _load_all_threads()
+    all_confirmations = _load_all_payments().get("confirmations", [])
+
+    resolved_any = False
+    now_iso = datetime.now().isoformat()
+
+    for t in thread_data.get("threads", []):
+        if t.get("topic_type") != "missing_payment":
+            continue
+        if t.get("status") != "open":
+            continue
+
+        # Parse topic_ref "rent:YYYY-MM"
+        topic_ref = t.get("topic_ref", "")
+        if not topic_ref.startswith("rent:"):
+            continue
+        period = topic_ref[5:]  # "YYYY-MM"
+        try:
+            year_str, month_str = period.split("-")
+            year = int(year_str)
+            month = int(month_str)
+        except (ValueError, IndexError):
+            continue
+
+        lease_group_id = t.get("lease_group_id")
+
+        # Check if a matching rent confirmation exists
+        has_payment = any(
+            c.get("lease_group_id") == lease_group_id
+            and c.get("confirmation_type") == "rent"
+            and c.get("period_year") == year
+            and c.get("period_month") == month
+            for c in all_confirmations
+        )
+
+        if has_payment:
+            t["status"] = "resolved"
+            t["resolved_at"] = now_iso
+            t["needs_landlord_attention"] = False
+            resolved_any = True
+
+    if resolved_any:
+        _save_threads_file(thread_data)
+
+    return resolved_any
+
+
+MONTH_NAMES = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+]
+
+
+def send_missing_payment_reminders():
+    """Send one automatic reminder per open missing_payment thread during grace period.
+
+    For each open missing_payment thread where:
+    - today > expected_due_date (rent is overdue)
+    - today <= expected_due_date + 2 days (still in grace period)
+    - needs_landlord_attention is False (not yet escalated)
+    - auto_reminders_suppressed is False
+    - last_reminder_at is None (no reminder sent yet)
+
+    Appends a system message and sets last_reminder_at.
+    Does NOT change needs_landlord_attention or escalation_started_at.
+
+    Single load at top, single save at end (only if any reminders sent).
+
+    Returns:
+        bool: True if any reminders were sent, False otherwise
+    """
+    thread_data = _load_all_threads()
+    today = datetime.now().date()
+    sent_any = False
+    now_iso = datetime.now().isoformat()
+
+    for t in thread_data.get("threads", []):
+        if t.get("topic_type") != "missing_payment":
+            continue
+        if t.get("status") != "open":
+            continue
+        if t.get("needs_landlord_attention") is True:
+            continue
+        if t.get("auto_reminders_suppressed") is True:
+            continue
+        if t.get("last_reminder_at") is not None:
+            continue
+
+        due_str = t.get("expected_due_date")
+        if not due_str:
+            continue
+        try:
+            due_date = datetime.strptime(due_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+
+        # Must be overdue but still within 2-day grace period
+        if not (today > due_date and today <= due_date + timedelta(days=2)):
+            continue
+
+        # Parse month/year from topic_ref "rent:YYYY-MM"
+        topic_ref = t.get("topic_ref", "")
+        if not topic_ref.startswith("rent:"):
+            continue
+        period = topic_ref[5:]
+        try:
+            year_str, month_str = period.split("-")
+            year = int(year_str)
+            month = int(month_str)
+        except (ValueError, IndexError):
+            continue
+
+        month_label = f"{MONTH_NAMES[month]} {year}"
+        body = (
+            f"Reminder: Rent for {month_label} has not yet been confirmed. "
+            f"If payment has been made, please submit confirmation."
+        )
+
+        new_message = {
+            "id": str(uuid.uuid4()),
+            "thread_id": t["id"],
+            "created_at": now_iso,
+            "actor": "system",
+            "message_type": "auto_reminder",
+            "body": body,
+            "payment_id": None,
+            "attachments": [],
+            "channel": "internal",
+            "delivered_via": ["internal"],
+            "external_ref": None,
+        }
+        thread_data["messages"].append(new_message)
+
+        t["last_reminder_at"] = now_iso
+        sent_any = True
+
+    if sent_any:
+        _save_threads_file(thread_data)
+
+    return sent_any
+
+
+def escalate_missing_payment_threads():
+    """Escalate open missing_payment threads after 2-day grace period.
+
+    For each open missing_payment thread where today > due_date + 2 days
+    and needs_landlord_attention is still False, sets
+    needs_landlord_attention = True and escalation_started_at = now.
+
+    Single load at top, single save at end (only if any escalated).
+
+    Returns:
+        bool: True if any threads were escalated, False otherwise
+    """
+    thread_data = _load_all_threads()
+    today = datetime.now().date()
+    escalated_any = False
+    now_iso = datetime.now().isoformat()
+
+    for t in thread_data.get("threads", []):
+        if t.get("topic_type") != "missing_payment":
+            continue
+        if t.get("status") != "open":
+            continue
+        if t.get("needs_landlord_attention") is True:
+            continue
+
+        due_str = t.get("expected_due_date")
+        if not due_str:
+            continue
+        try:
+            due_date = datetime.strptime(due_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+
+        if today > due_date + timedelta(days=2):
+            t["needs_landlord_attention"] = True
+            if t.get("escalation_started_at") is None:
+                t["escalation_started_at"] = now_iso
+            escalated_any = True
+
+    if escalated_any:
+        _save_threads_file(thread_data)
+
+    return escalated_any
 
 
 def _load_all_terminations():
@@ -1437,6 +1821,9 @@ def _load_all_leases():
             # Add expected payment confirmation flag
             if _migrate_lease_add_confirmation_flag(lease):
                 migrated = True
+            # Add first-month rent fields
+            if _migrate_lease_add_first_month_fields(lease):
+                migrated = True
 
         # Save if any migrations occurred
         if migrated:
@@ -1597,6 +1984,24 @@ def _migrate_lease_add_confirmation_flag(lease):
     return True
 
 
+def _migrate_lease_add_first_month_fields(lease):
+    """Add first_month_mode, first_month_due_date, first_month_amount if missing.
+
+    Existing leases default to null (no first-month override).
+    """
+    cv = lease.get("current_values")
+    if cv is None:
+        return False
+
+    if "first_month_mode" in cv:
+        return False
+
+    cv["first_month_mode"] = None
+    cv["first_month_due_date"] = None
+    cv["first_month_amount"] = None
+    return True
+
+
 def compute_monthly_coverage(expected_payments, month_payments):
     """Compute payment category coverage for a single month.
 
@@ -1632,6 +2037,64 @@ def compute_monthly_coverage(expected_payments, month_payments):
         "coverage_summary": f"{covered} / {total}" if total > 0 else None,
         "is_complete": total == 0 or covered >= total,
     }
+
+
+def evaluate_missing_payment_status(lease_data, year, month, today_date,
+                                    payment_confirmations=None):
+    """Determine whether a missing_payment thread should exist for a given month.
+
+    Pure evaluator — no file writes, no thread creation.
+    Combines get_rent_due_info_for_month() (what's due) with
+    compute_monthly_coverage() (what's been submitted).
+
+    Args:
+        lease_data: full lease dict (with current_values)
+        year: int
+        month: int
+        today_date: date object (usually today)
+        payment_confirmations: optional pre-loaded list of confirmation dicts.
+            If None, loads from _load_all_payments().
+
+    Returns:
+        dict with should_create_thread, expected_due_date,
+        expected_amount, is_first_month
+    """
+    no = {"should_create_thread": False, "expected_due_date": None,
+          "expected_amount": None, "is_first_month": None}
+
+    rent_info = get_rent_due_info_for_month(lease_data, year, month)
+    due_date = rent_info.get("due_date")
+    expected_amount = rent_info.get("expected_amount")
+    is_first_month = rent_info.get("is_first_month")
+
+    if due_date is None or expected_amount is None:
+        return no
+
+    if due_date >= today_date:
+        return no
+
+    cv = lease_data.get("current_values") or {}
+    expected_payments = cv.get("expected_payments", [])
+    lease_group_id = lease_data.get("lease_group_id", lease_data.get("id"))
+
+    if payment_confirmations is None:
+        payment_confirmations = _load_all_payments().get("confirmations", [])
+    month_payments = [c for c in payment_confirmations
+                      if c.get("lease_group_id") == lease_group_id
+                      and c.get("period_year") == year
+                      and c.get("period_month") == month]
+
+    coverage = compute_monthly_coverage(expected_payments, month_payments)
+
+    if "rent" in coverage.get("missing_categories", []):
+        return {
+            "should_create_thread": True,
+            "expected_due_date": due_date,
+            "expected_amount": expected_amount,
+            "is_first_month": is_first_month,
+        }
+
+    return no
 
 
 def load_lease_data():
@@ -1800,6 +2263,173 @@ def _parse_month_tuple(date_str):
         return (int(parts[0]), int(parts[1]))
     except (ValueError, IndexError):
         return None
+
+
+def calculate_prorated_amount(start_date_str, monthly_rent):
+    """Calculate prorated rent for a partial first month.
+
+    This is a pure helper — no I/O, no side effects.
+    Used as an assistive suggestion only. The landlord must
+    explicitly confirm any prorated amount before it is stored.
+
+    Args:
+        start_date_str: Lease start date as "YYYY-MM-DD"
+        monthly_rent: Full monthly rent amount (number)
+
+    Returns:
+        int (rounded prorated amount) or None if inputs invalid
+    """
+    if not start_date_str or monthly_rent is None:
+        return None
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+    try:
+        rent = float(monthly_rent)
+        if rent <= 0:
+            return None
+    except (ValueError, TypeError):
+        return None
+
+    days_in_month = calendar.monthrange(start_date.year, start_date.month)[1]
+    days_occupied = days_in_month - start_date.day + 1
+    prorated = rent * (days_occupied / days_in_month)
+    return round(prorated)
+
+
+def get_rent_due_info_for_month(lease, year, month):
+    """Return correct rent due date and expected amount for a given month.
+
+    Pure helper — no I/O, no side effects, no lease mutation.
+    The engine (Phase 6+) calls this to determine when rent is due
+    and how much is expected for any calendar month.
+
+    Args:
+        lease: Full lease dict (must have current_values)
+        year: Calendar year (int)
+        month: Calendar month 1-12 (int)
+
+    Returns:
+        dict with keys:
+            due_date: date object or None
+            expected_amount: int or None
+            is_first_month: bool
+    """
+    from datetime import date
+
+    safe_none = {"due_date": None, "expected_amount": None, "is_first_month": False}
+
+    cv = lease.get("current_values") if lease else None
+    if not cv:
+        return safe_none
+
+    # --- Extract fields safely ---
+    lease_start_str = cv.get("lease_start_date")
+    rent_due_day = cv.get("rent_due_day")
+    monthly_rent = cv.get("monthly_rent")
+    first_month_mode = cv.get("first_month_mode")
+    first_month_due_str = cv.get("first_month_due_date")
+    first_month_amount = cv.get("first_month_amount")
+
+    # Parse lease start date
+    try:
+        lease_start = datetime.strptime(lease_start_str, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return safe_none
+
+    # rent_due_day must be a valid integer
+    if rent_due_day is None:
+        return safe_none
+    try:
+        rent_due_day = int(rent_due_day)
+    except (ValueError, TypeError):
+        return safe_none
+
+    # monthly_rent must be a valid positive integer
+    try:
+        monthly_rent = int(float(monthly_rent))
+        if monthly_rent <= 0:
+            return safe_none
+    except (ValueError, TypeError):
+        return safe_none
+
+    # --- Determine if this is the first lease month ---
+    is_first_month = (year == lease_start.year and month == lease_start.month)
+
+    # --- Helper: clamp due day to month length ---
+    days_in_month = calendar.monthrange(year, month)[1]
+    effective_due_day = min(rent_due_day, days_in_month)
+
+    # --- Non-first month: standard rent ---
+    if not is_first_month:
+        due_date = date(year, month, effective_due_day)
+        return {
+            "due_date": due_date,
+            "expected_amount": monthly_rent,
+            "is_first_month": False,
+        }
+
+    # --- First month handling ---
+
+    # Mode not set: treat as standard month (Option B — landlord-explicit)
+    if first_month_mode is None:
+        due_date = date(year, month, effective_due_day)
+        return {
+            "due_date": due_date,
+            "expected_amount": monthly_rent,
+            "is_first_month": True,
+        }
+
+    if first_month_mode == "prorated_immediate":
+        if first_month_amount is None:
+            return {"due_date": None, "expected_amount": None, "is_first_month": True}
+        return {
+            "due_date": lease_start,
+            "expected_amount": first_month_amount,
+            "is_first_month": True,
+        }
+
+    if first_month_mode == "prorated_next_due_day":
+        if first_month_amount is None:
+            return {"due_date": None, "expected_amount": None, "is_first_month": True}
+        # Compute next due date after lease_start_date
+        if lease_start.day < rent_due_day:
+            # Due day hasn't passed yet this month
+            next_month_year = lease_start.year
+            next_month_month = lease_start.month
+        else:
+            # Due day already passed — next month
+            if lease_start.month == 12:
+                next_month_year = lease_start.year + 1
+                next_month_month = 1
+            else:
+                next_month_year = lease_start.year
+                next_month_month = lease_start.month + 1
+        next_days_in_month = calendar.monthrange(next_month_year, next_month_month)[1]
+        clamped_day = min(rent_due_day, next_days_in_month)
+        due_date = date(next_month_year, next_month_month, clamped_day)
+        return {
+            "due_date": due_date,
+            "expected_amount": first_month_amount,
+            "is_first_month": True,
+        }
+
+    if first_month_mode == "custom":
+        if first_month_amount is None or not first_month_due_str:
+            return {"due_date": None, "expected_amount": None, "is_first_month": True}
+        try:
+            due_date = datetime.strptime(first_month_due_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return {"due_date": None, "expected_amount": None, "is_first_month": True}
+        return {
+            "due_date": due_date,
+            "expected_amount": first_month_amount,
+            "is_first_month": True,
+        }
+
+    # Unknown mode — fail safely
+    return {"due_date": None, "expected_amount": None, "is_first_month": True}
 
 
 def get_governing_lease_for_month(lease_group_id, target_year, target_month):
@@ -2031,6 +2661,9 @@ def create_lease_renewal(original_lease_id):
                 "expected_payments",
                 _default_expected_payments(orig_cv.get("monthly_rent"))
             ),
+            "first_month_mode": None,
+            "first_month_due_date": None,
+            "first_month_amount": None,
         },
         "needs_expected_payment_confirmation": True,
     }
@@ -2469,8 +3102,24 @@ def index():
             if materialise_system_threads(lgid):
                 any_materialised = True
 
+            # Materialise missing_payment threads for overdue rent
+            if materialise_missing_payment_threads(lgid, lease):
+                any_materialised = True
+
         # Reload thread_data if any threads were created by materialisation
         if any_materialised:
+            thread_data = _load_all_threads()
+
+        # Auto-resolve missing_payment threads where rent now exists
+        if auto_resolve_missing_payment_threads():
+            thread_data = _load_all_threads()
+
+        # Send automatic reminders for missing_payment threads in grace period
+        if send_missing_payment_reminders():
+            thread_data = _load_all_threads()
+
+        # Escalate missing_payment threads past grace period
+        if escalate_missing_payment_threads():
             thread_data = _load_all_threads()
 
         for lease in leases:
@@ -2509,11 +3158,13 @@ def index():
 
         grouped_leases = group_leases_by_lessor(leases)
         global_alerts = get_global_alerts(leases)
+        console_data = get_global_attention_summary(leases)
         return render_template("index.html",
                                uploads=uploads,
                                leases=leases,
                                grouped_leases=grouped_leases,
                                global_alerts=global_alerts,
+                               console_data=console_data,
                                lease_data=None,
                                edit_mode=False,
                                reminder_status=None,
@@ -2582,6 +3233,24 @@ def index():
 
         # Can renew: terminated OR expired (not active)
         lease_data["_can_renew"] = is_terminated or is_expired
+
+        # Prorated suggestion for First Month UI (display-only, never saved)
+        lease_data["_prorated_suggestion"] = None
+        if edit_mode:
+            cv = lease_data.get("current_values") or {}
+            _ps_start = cv.get("lease_start_date")
+            _ps_due_day = cv.get("rent_due_day")
+            if _ps_start and _ps_due_day:
+                try:
+                    _ps_start_day = datetime.strptime(_ps_start, "%Y-%m-%d").day
+                    _ps_due_day_int = int(_ps_due_day)
+                except (ValueError, TypeError):
+                    _ps_start_day = None
+                    _ps_due_day_int = None
+                if _ps_start_day is not None and _ps_due_day_int is not None and _ps_start_day > _ps_due_day_int:
+                    lease_data["_prorated_suggestion"] = calculate_prorated_amount(
+                        _ps_start, cv.get("monthly_rent")
+                    )
 
     # Get lease versions for history display
     lease_versions = []
@@ -3004,6 +3673,9 @@ def upload_file():
                     "expected_payments",
                     _default_expected_payments(orig_values.get("monthly_rent"))
                 ),
+                "first_month_mode": None,
+                "first_month_due_date": None,
+                "first_month_amount": None,
             },
             "needs_expected_payment_confirmation": True,
         }
@@ -3041,6 +3713,9 @@ def upload_file():
                     "rent_escalation_percent": None
                 },
                 "expected_payments": _default_expected_payments(),
+                "first_month_mode": None,
+                "first_month_due_date": None,
+                "first_month_amount": None,
             },
             "needs_expected_payment_confirmation": False,
         }
@@ -3148,6 +3823,43 @@ def save_lease():
         {"type": "maintenance", "expected": maintenance_checked, "typical_amount": maintenance_amount},
         {"type": "utilities", "expected": utilities_checked, "typical_amount": None},
     ]
+
+    # --- First month fields (strict invariant) ---
+    first_month_mode = None
+    first_month_due_date = None
+    first_month_amount = None
+
+    parsed_start = current_values.get("lease_start_date")
+    parsed_due_day = current_values.get("rent_due_day")
+
+    if parsed_start and parsed_due_day:
+        try:
+            start_day = datetime.strptime(parsed_start, "%Y-%m-%d").day
+            due_day = int(parsed_due_day)
+        except (ValueError, TypeError):
+            start_day = None
+            due_day = None
+
+        if start_day is not None and due_day is not None and start_day > due_day:
+            raw_mode = _normalize_string(request.form.get("first_month_mode"))
+            raw_due_date = _validate_date(request.form.get("first_month_due_date"))
+            raw_amount = _validate_positive_number(request.form.get("first_month_amount"))
+
+            if raw_mode in ("prorated_immediate", "prorated_next_due_day"):
+                if raw_amount is not None and float(raw_amount) > 0:
+                    first_month_mode = raw_mode
+                    first_month_due_date = None
+                    first_month_amount = round(float(raw_amount))
+
+            elif raw_mode == "custom":
+                if raw_due_date is not None and raw_amount is not None and float(raw_amount) > 0:
+                    first_month_mode = raw_mode
+                    first_month_due_date = raw_due_date
+                    first_month_amount = round(float(raw_amount))
+
+    current_values["first_month_mode"] = first_month_mode
+    current_values["first_month_due_date"] = first_month_due_date
+    current_values["first_month_amount"] = first_month_amount
 
     # Load existing leases
     all_data = _load_all_leases()

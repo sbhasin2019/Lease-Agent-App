@@ -30,6 +30,129 @@
             max-width: 860px;
             margin: 0 auto;
         }
+        /* Dashboard-wide container: used when Action Console is visible */
+        .container.dashboard-wide {
+            max-width: 1280px;
+            padding: 0 40px;
+        }
+        /* Two-column dashboard layout */
+        .dashboard-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .container.dashboard-wide {
+                max-width: 860px;
+            }
+            .dashboard-two-col {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* Action Console */
+        .action-console {
+            position: sticky;
+            top: 20px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        .action-console-header {
+            position: sticky;
+            top: 0;
+            background: #ffffff;
+            padding: 22px 24px 18px;
+            border-bottom: 1px solid #e5e7eb;
+            border-radius: 12px 12px 0 0;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .action-console-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: #111827;
+        }
+        .action-console-count {
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            background: #1f2937;
+            border-radius: 10px;
+            padding: 2px 8px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .action-console-body {
+            padding: 8px 0;
+        }
+        .action-console-empty {
+            padding: 32px 20px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        .console-lease-group {
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .console-lease-group:last-child {
+            border-bottom: none;
+        }
+        .console-lease-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding: 10px 20px 4px;
+        }
+        .console-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 20px;
+            font-size: 13px;
+            color: #374151;
+            transition: background 0.1s;
+        }
+        .console-item:hover {
+            background: #f9fafb;
+        }
+        .console-item-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 5px;
+        }
+        .console-item-dot.urgency-high { background: #ef4444; }
+        .console-item-dot.urgency-medium { background: #f59e0b; }
+        .console-item-dot.urgency-normal { background: #9ca3af; }
+        .console-item-text {
+            flex: 1;
+            min-width: 0;
+        }
+        .console-item-label {
+            font-weight: 500;
+            color: #1f2937;
+        }
+        .console-item-reason {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 1px;
+        }
+        .console-filter-active .console-lease-group {
+            display: none;
+        }
+        .console-filter-active .console-lease-group.console-group-visible {
+            display: block;
+        }
 
         /* Page header */
         .page-header {
@@ -1960,13 +2083,43 @@
         }
         .leases-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr;
             gap: 16px;
         }
         @media (max-width: 640px) {
             .leases-grid {
                 grid-template-columns: 1fr;
             }
+        }
+        /* Dashboard-only compact card overrides */
+        .dashboard-cards-col .leases-grid {
+            gap: 8px;
+        }
+        .dashboard-cards-col .lease-card {
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: none;
+            border: 1px solid #e5e7eb;
+            transform: scale(0.8);
+            transform-origin: top left;
+        }
+        .dashboard-cards-col .lease-card-title {
+            font-size: 13px;
+        }
+        .dashboard-cards-col .lease-card-subtitle {
+            margin-bottom: 6px;
+        }
+        .dashboard-cards-col .lease-card-body {
+            padding-bottom: 4px;
+            gap: 4px;
+        }
+        .dashboard-cards-col .lease-card-rent {
+            margin-top: 4px;
+        }
+        .dashboard-cards-col .btn-view-lease,
+        .dashboard-cards-col .btn-renew-primary {
+            padding: 4px 8px;
+            margin-top: 4px;
         }
         .lease-card {
             position: relative;
@@ -2598,7 +2751,7 @@
     </style>
 </head>
 <body>
-<div class="container">
+<div class="container{% if show_dashboard %} dashboard-wide{% endif %}">
     <div class="page-header">
         <h1>Easemylease</h1>
         <p>Welcome! This app will help you track your lease details.</p>
@@ -2617,32 +2770,14 @@
 
     {% if show_dashboard %}
     <!-- DASHBOARD-FIRST VIEW -->
-    <div class="leases-dashboard">
-        {% if global_alerts and global_alerts|length > 0 %}
-        <div class="global-alerts">
-            <div class="global-alerts-header">Alerts</div>
-            {% for alert in global_alerts %}
-            <a href="/?lease_id={{ alert.lease_id }}" class="alert-row">
-                <span class="alert-urgency {{ alert.urgency }}">{% if alert.urgency == 'critical' %}Action Required{% elif alert.urgency == 'urgent' %}Attention{% elif alert.urgency == 'warning' %}Upcoming{% else %}Reminder{% endif %}</span>
-                <span class="alert-content">
-                    <span class="alert-message">
-                        <span class="alert-type">{% if alert.type == 'lease_expiry' %}Lease{% else %}Rent{% endif %}</span>{{ alert.message }}
-                    </span>
-                    <span class="alert-action">{{ alert.lease_nickname }}</span>
-                </span>
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-
+    <div class="leases-dashboard dashboard-two-col">
+    <div class="dashboard-cards-col">
         {% if leases and leases|length > 0 %}
         <div class="leases-dashboard-header">
             <h3>Your Leases</h3>
             <span class="leases-dashboard-count">{{ leases|length }} lease{% if leases|length != 1 %}s{% endif %}</span>
         </div>
-        <div class="dashboard-actions">
-            <a href="/?new=true" class="btn-upload-new">+ Upload New Lease</a>
-        </div>
+        <a href="/?new=true" class="btn-upload-new">+ Upload New Lease</a>
         {% for lessor_name, lessor_leases in grouped_leases.items() %}
         <div class="landlord-group">
             <div class="landlord-group-header">{{ lessor_name }}</div>
@@ -2703,11 +2838,18 @@
                             {% if lease._attention_items %}
                             <ul class="attention-list">
                                 {% for item in lease._attention_items %}
-                                <li class="attention-item">
+                                <li class="attention-item"{% if item.topic_type == 'missing_payment' %} style="flex-wrap: wrap;"{% endif %}>
                                     <span class="attention-item-month">{{ item.display_label }}</span>
                                     <span class="attention-item-reason">{{ item.reason }}</span>
-                                    {% if item.open_month %}
+                                    {% if item.topic_type != 'missing_payment' and item.open_month %}
                                     <a href="/?lease_id={{ lease.id }}&open_month={{ item.open_month }}&return_to=attention" class="attention-item-view">View</a>
+                                    {% endif %}
+                                    {% if item.topic_type == 'missing_payment' %}
+                                    <div style="width: 100%; font-size: 0.8em; color: #78350f; margin-top: 4px; padding: 6px 8px; background: #fefce8; border-radius: 4px;">
+                                        {% if item.expected_amount %}Expected: &#8377;{{ item.expected_amount | format_money }}{% endif %}
+                                        {% if item.expected_due_date %} &middot; Due: {{ item.expected_due_date }}{% endif %}
+                                        {% if item.auto_reminders_suppressed %}<span style="color: #9ca3af; font-style: italic; margin-left: 8px;">(reminders stopped)</span>{% endif %}
+                                    </div>
                                     {% endif %}
                                 </li>
                                 {% endfor %}
@@ -2756,6 +2898,36 @@
         });
         {% endif %}
         </script>
+    </div><!-- end dashboard-cards-col -->
+
+    <div class="action-console" id="action-console">
+        <div class="action-console-header">
+            <span class="action-console-title">Action Console</span>
+            <span class="action-console-count">{{ console_data.total_open_items if console_data else 0 }}</span>
+        </div>
+        <div class="action-console-body">
+            {% if console_data and console_data.total_open_items > 0 %}
+            {% for group in console_data.lease_groups %}
+            <div class="console-lease-group" data-lease-id="{{ group.lease_group_id }}">
+                <div class="console-lease-name">{{ group.lease_display_name }}</div>
+                {% for item in group['items'] %}
+                <div class="console-item">
+                    <span class="console-item-dot urgency-{{ item.urgency_level }}"></span>
+                    <div class="console-item-text">
+                        <div class="console-item-label">{{ item.display_label }}</div>
+                        <div class="console-item-reason">{{ item.reason }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="action-console-empty">
+                No outstanding items.
+            </div>
+            {% endif %}
+        </div>
+    </div>
     </div>
 
     {% elif lease_data and not edit_mode %}
@@ -3414,11 +3586,18 @@
                 {% if lease_data._attention_items %}
                 <ul class="attention-list">
                     {% for item in lease_data._attention_items %}
-                    <li class="attention-item">
+                    <li class="attention-item"{% if item.topic_type == 'missing_payment' %} style="flex-wrap: wrap;"{% endif %}>
                         <span class="attention-item-month">{{ item.display_label }}</span>
                         <span class="attention-item-reason">{{ item.reason }}</span>
-                        {% if item.open_month %}
+                        {% if item.topic_type != 'missing_payment' and item.open_month %}
                         <a href="/?lease_id={{ lease_data.id }}&open_month={{ item.open_month }}&return_to=attention" class="attention-item-view">View</a>
+                        {% endif %}
+                        {% if item.topic_type == 'missing_payment' %}
+                        <div style="width: 100%; font-size: 0.8em; color: #78350f; margin-top: 4px; padding: 6px 8px; background: #fefce8; border-radius: 4px;">
+                            {% if item.expected_amount %}Expected: &#8377;{{ item.expected_amount | format_money }}{% endif %}
+                            {% if item.expected_due_date %} &middot; Due: {{ item.expected_due_date }}{% endif %}
+                            {% if item.auto_reminders_suppressed %}<span style="color: #9ca3af; font-style: italic; margin-left: 8px;">(reminders stopped)</span>{% endif %}
+                        </div>
                         {% endif %}
                     </li>
                     {% endfor %}
@@ -3512,6 +3691,70 @@
                 <label for="rent_due_day">Rent Due Day (1-31)</label>
                 <input type="number" id="rent_due_day" name="rent_due_day" placeholder="1" min="1" max="31" value="{{ cv.rent_due_day or '' }}">
             </div>
+
+            {% set start_date = cv.lease_start_date %}
+            {% set due_day = cv.rent_due_day %}
+
+            {% if start_date and due_day %}
+                {% set start_day = start_date.split('-')[2]|int %}
+                {% set due_day_int = due_day|int %}
+            {% else %}
+                {% set start_day = 0 %}
+                {% set due_day_int = 0 %}
+            {% endif %}
+
+            {% if start_day > due_day_int %}
+            <div class="first-month-section" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa;">
+                <h4 style="margin: 0 0 0.25rem 0; font-size: 1rem;">First Month Rent Handling</h4>
+                <p style="margin: 0 0 1rem 0; color: #666; font-size: 0.85rem;">Lease starts after the rent due day. How should the first month's rent be handled?</p>
+
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                    <label style="font-size: 0.9rem;">
+                        <input type="radio"
+                               name="first_month_mode"
+                               value="prorated_immediate"
+                               {% if cv.first_month_mode == "prorated_immediate" %}checked{% endif %}>
+                        Prorated and due immediately
+                    </label>
+
+                    <label style="font-size: 0.9rem;">
+                        <input type="radio"
+                               name="first_month_mode"
+                               value="prorated_next_due_day"
+                               {% if cv.first_month_mode == "prorated_next_due_day" %}checked{% endif %}>
+                        Prorated and due on next rent day
+                    </label>
+
+                    <label style="font-size: 0.9rem;">
+                        <input type="radio"
+                               name="first_month_mode"
+                               value="custom"
+                               {% if cv.first_month_mode == "custom" %}checked{% endif %}>
+                        Custom amount and due date
+                    </label>
+                </div>
+
+                <div class="form-group" style="max-width: 200px;">
+                    <label>First Month Amount (₹)</label>
+                    <input type="number"
+                           name="first_month_amount"
+                           value="{{ cv.first_month_amount or '' }}"
+                           min="1">
+                    {% if lease_data._prorated_suggestion is not none %}
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #888;">
+                        Suggested prorated amount: ₹{{ lease_data._prorated_suggestion | format_money }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <div id="first-month-custom-date-container" class="form-group" style="max-width: 200px;">
+                    <label>Custom Due Date</label>
+                    <input type="date"
+                           name="first_month_due_date"
+                           value="{{ cv.first_month_due_date or '' }}">
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Expected Monthly Payments section -->
             <div class="expected-payments-section" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa;">
@@ -5535,6 +5778,30 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const radios = document.querySelectorAll('input[name="first_month_mode"]');
+    const customContainer = document.getElementById("first-month-custom-date-container");
+
+    function updateVisibility() {
+        let selected = document.querySelector('input[name="first_month_mode"]:checked');
+        if (!customContainer) return;
+
+        if (selected && selected.value === "custom") {
+            customContainer.style.display = "block";
+        } else {
+            customContainer.style.display = "none";
+        }
+    }
+
+    radios.forEach(radio => {
+        radio.addEventListener("change", updateVisibility);
+    });
+
+    updateVisibility();
+});
+</script>
 
 </body>
 </html>

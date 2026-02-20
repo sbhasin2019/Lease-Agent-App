@@ -188,8 +188,10 @@ For planned future work, see ACTIVE_ROADMAP.md.
     Key design decisions locked:
     - Coverage (monthly summary) is informational only — never
       creates threads, never triggers attention badge
-    - Threads are the actionable layer — only open threads where
-      waiting_on == "landlord" are counted in attention badge
+    - Threads are the actionable layer — open threads where
+      needs_landlord_attention == true are counted in attention
+      badge (originally waiting_on == "landlord"; changed to
+      needs_landlord_attention in Phase 5, 2026-02-18)
     - payment_review threads created only on tenant submission
       (landlord flagging is a message inside existing thread)
     - Idempotency checks open threads only — resolved threads
@@ -201,8 +203,9 @@ For planned future work, see ACTIVE_ROADMAP.md.
     - Nudge display: primary in thread view (per-category modal),
       secondary in attention modal under "Follow-ups (Optional)"
     - Tenant visibility: sees payment_review, missing_payment,
-      general threads; sees submission, flag, reply, reminder
-      messages; does NOT see nudge or acknowledge messages
+      general threads; sees submission, flag, reply, reminder,
+      auto_reminder messages; does NOT see nudge or acknowledge
+      messages
     - No migration from landlord_review_data.json — clean cut
       on test data; materialisation handles existing payments
 
@@ -778,6 +781,94 @@ For planned future work, see ACTIVE_ROADMAP.md.
 
   This is a legacy-only scenario. All newly uploaded leases
   automatically store both PDF and extracted text.
+
+----------------------------------------------------------------
+
+2026-02-20  Global alerts — dead dashboard integration identified
+
+  get_global_alerts() is computed on every dashboard load and
+  passed to the template as global_alerts, but the dashboard
+  template no longer renders it. The HTML that displayed global
+  alerts was removed during Phase 10B (replaced by the Action
+  Console).
+
+  Current state:
+  - get_global_alerts() function: LIVE (no code changes needed)
+  - Dashboard route computation (line ~3150): DEAD — computed
+    but never rendered
+  - calculate_lease_expiry_status(): LIVE — used in lease
+    detail view via calculate_reminder_status()
+  - calculate_rent_payment_status(): LIVE — used in lease
+    detail view via calculate_reminder_status()
+
+  Action: Remove get_global_alerts() computation and
+  global_alerts= parameter from the dashboard route in a
+  future cleanup. The function itself should be preserved
+  until confirmed unused by all routes.
+
+----------------------------------------------------------------
+
+2026-02-20  payment_review threads — attention integration (Option A)
+
+  Decision: payment_review threads are now part of the attention
+  system. Previously, needs_landlord_attention was set to false
+  at creation with no code path to set it true (known gap from
+  Phase 5 badge simplification). This meant payment_review
+  threads did not appear in the attention badge or Action Console.
+
+  Changes:
+  - materialise_system_threads() now creates payment_review
+    threads with needs_landlord_attention = true
+  - add_message_to_thread() now syncs needs_landlord_attention
+    after every message, scoped to payment_review threads only:
+      open + waiting_on == "landlord" → true
+      open + waiting_on == "tenant"   → false
+      resolved                        → false
+  - missing_payment threads are NOT affected — they manage
+    needs_landlord_attention via the escalation pipeline
+
+  Effect: payment_review threads now appear in the attention
+  badge and Action Console when waiting_on == "landlord".
+
+----------------------------------------------------------------
+
+2026-02-20  Phase 10 — UI architecture shift: modal → Action Console
+
+  Decision: Replace the modal-driven attention model with a persistent
+  Action Console panel on the landlord dashboard.
+
+  Previous model:
+    Each lease card had an attention badge. Clicking the badge
+    opened a modal listing that lease's attention items. Attention
+    was scoped per-lease and required the landlord to open each
+    lease individually to see what needed action.
+
+  New model:
+    The dashboard becomes a two-column layout. Left column shows
+    lease cards. Right column shows a persistent Action Console
+    that lists ALL attention items across ALL leases, grouped by
+    lease and sorted by urgency. The landlord sees everything at
+    a glance without opening any lease.
+
+  Motivation:
+    As thread types expand (missing_payment now, renewal and
+    maintenance/utilities later), the per-lease modal becomes
+    inadequate. The landlord needs a global operational surface
+    that shows the full state of their portfolio.
+
+  Transition:
+    The attention modal is kept temporarily for backward
+    compatibility. It will not receive new action buttons.
+    It will be removed in a future refactor once the Action
+    Console supports all decision workflows.
+
+  Scope:
+    This is a layout + data presentation change only.
+    No new thread types. No new thread fields. No mutation logic.
+    All state continues to derive from threads.json.
+
+  See PROJECT_CONTEXT.md → UI ARCHITECTURE — CONTROL CENTRE MODEL
+  for the authoritative architectural specification.
 
 ----------------------------------------------------------------
 END OF HISTORICAL LOG

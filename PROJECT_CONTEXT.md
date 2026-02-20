@@ -8,6 +8,7 @@ It does not contain history, roadmaps, or speculative features.
 
 For historical decisions and fixes, see PROJECT_FIXES_AND_DECISIONS.md.
 For planned but unbuilt features, see ACTIVE_ROADMAP.md.
+For active implementation work, see ACTIVE_BUILD.md.
 
 ----------------------------------------------------------------
 BRANDING NOTE
@@ -125,6 +126,13 @@ All save operations use atomic writes (tmp + fsync + rename).
   - Replaces landlord_review_data.json (superseded 2026-02-13)
   - No migration was performed — clean cut on test data
   - All legacy event-based code removed (2026-02-13)
+  - IMPORTANT: _load_all_threads() is NOT a pure read. It
+    performs an idempotent inline schema backfill: if any thread
+    lacks escalation fields (needs_landlord_attention,
+    escalation_started_at, last_reminder_at,
+    auto_reminders_suppressed), it adds them with safe defaults
+    and writes the file back to disk. This runs once per
+    thread that lacks the fields, then never again.
  
   termination_data.json                                                                                               
   - Early lease termination events                                                                                    
@@ -266,6 +274,15 @@ D. Thread (threads.json)
     waiting_on                          "landlord" | "tenant" | null
     created_at                          str (ISO timestamp)
     resolved_at                         str (ISO timestamp) | null
+    needs_landlord_attention            bool (controls attention badge)
+    escalation_started_at               str (ISO timestamp) | null
+    last_reminder_at                    str (ISO timestamp) | null
+    auto_reminders_suppressed           bool (default false)
+
+  Additional fields (present on missing_payment threads):
+    expected_due_date                   str (YYYY-MM-DD) | absent
+    expected_amount                     number | absent
+    is_first_month                      bool | absent
 
   topic_ref is a query key, not a foreign key. For payment-related
   threads it identifies the category and period (e.g. "rent:2026-01").
@@ -282,7 +299,8 @@ E. Message (threads.json)
     created_at                          str (ISO timestamp)
     actor                               "landlord" | "tenant" | "system"
     message_type                        "submission" | "flag" | "reply"
-                                        | "reminder" | "acknowledge" | "nudge"
+                                        | "reminder" | "auto_reminder"
+                                        | "acknowledge" | "nudge"
     body                                str | null
     payment_id                          str | null (required for submission messages,
                                         references payment_data.json)
@@ -335,8 +353,21 @@ Thread lifecycle (unified model, from 2026-02-13):
   waiting_on transitions (explicit, never inferred):
     Tenant submits or replies       → waiting_on = "landlord"
     Landlord flags or replies       → waiting_on = "tenant"
-    Landlord acknowledges           → status = "resolved", waiting_on = null
-    System auto-resolves            → status = "resolved", waiting_on = null
+    Landlord acknowledges           → status = "resolved", waiting_on = null,
+                                      needs_landlord_attention = false
+    System auto-resolves            → status = "resolved",
+                                      needs_landlord_attention = false
+                                      (waiting_on is NOT changed)
+    reminder / auto_reminder / nudge → no change to waiting_on
+
+  needs_landlord_attention sync (payment_review threads only):
+    add_message_to_thread() synchronises needs_landlord_attention
+    after every message, scoped to payment_review threads only:
+      status == "open" AND waiting_on == "landlord" → true
+      status == "open" AND waiting_on == "tenant"   → false
+      status == "resolved"                          → false
+    missing_payment threads are NOT affected — they manage
+    needs_landlord_attention via the escalation pipeline.
 
   Allowed landlord actions: Acknowledge or Raise a flag (binary).
   "Noted" does not exist as an active UI action.
@@ -354,9 +385,57 @@ Thread lifecycle (unified model, from 2026-02-13):
   Tenant visibility:
     Tenant sees threads of type: payment_review, missing_payment,
     general. Renewal threads are visible but tenant cannot resolve.
-    Tenant-visible message types: submission, flag, reply, reminder.
+    Tenant-visible message types: submission, flag, reply, reminder,
+    auto_reminder.
     Tenant does NOT see: nudge, acknowledge, internal-only system
     messages.
+
+Missing payment thread lifecycle (rent):
+
+  Stage 1 — CREATED (materialised on dashboard load)
+    status = "open"
+    waiting_on = "tenant"
+    needs_landlord_attention = false
+    last_reminder_at = null
+    escalation_started_at = null
+    auto_reminders_suppressed = false
+    Thread is NOT visible in attention badge.
+
+  Stage 2 — GRACE PERIOD (days 1–2 after due date)
+    One automatic reminder sent (max 1 per thread ever).
+    message_type = "auto_reminder", actor = "system".
+    last_reminder_at set to current timestamp.
+    needs_landlord_attention remains false.
+    Thread is still NOT visible in attention badge.
+    Manual landlord reminders also set last_reminder_at,
+    permanently blocking automatic reminders for that thread.
+
+  Stage 3 — ESCALATED (day 3+ after due date)
+    needs_landlord_attention = true (one-time flip).
+    escalation_started_at = current timestamp (set once).
+    No system message appended (silent escalation).
+    Thread now visible in attention badge + Action Console.
+    Reminder window and escalation threshold are mutually
+    exclusive by timing.
+
+  Stage 4 — RESOLVED (two paths)
+    Auto-resolve (matching payment submitted):
+      status = "resolved", resolved_at = now
+      needs_landlord_attention = false
+    Manual acknowledge (via add_message_to_thread):
+      status = "resolved", waiting_on = null
+      resolved_at = now
+
+  Key invariants:
+  - waiting_on remains "tenant" throughout (never flips)
+  - Max automatic reminders per thread = 1
+  - Escalation is silent (no system message appended)
+  - Attention visibility controlled solely by
+    needs_landlord_attention, NOT by waiting_on
+  - Grace period = 2 days (hardcoded timedelta(days=2))
+  - Auto-resolution evaluated BEFORE escalation and
+    reminders in the pipeline — a paid month never
+    escalates or receives a reminder
 
   Prior model (pre-2026-02-13, fully removed):
     Conversation state was implicit, computed on read by
@@ -599,14 +678,21 @@ Local development on macOS (Terminal + Python venv)
   attention is needed. The badge is a calm human nudge, not an alert.
 
   Attention badge counts:
-    Threads where status == "open" AND waiting_on == "landlord"
+    Threads where status == "open" AND needs_landlord_attention == true
 
   It does NOT count:
-    - Threads where waiting_on == "tenant"
+    - Threads where needs_landlord_attention == false
+    - Threads where waiting_on == "tenant" (unless escalated)
     - 7-day nudge suggestions
     - Coverage indicators (informational layer)
 
   The badge answers: "What requires MY action right now?"
+
+  Note: waiting_on does NOT control badge visibility.
+  needs_landlord_attention is the sole gate for attention.
+  These two concepts are independent:
+    waiting_on = who needs to act next (responsibility)
+    needs_landlord_attention = show in badge (visibility)
 
   Clicking the badge opens an Attention Overview modal listing
   open threads grouped by lease, each with a topic label, latest
@@ -675,33 +761,59 @@ Thread Creation Triggers:
     Created when: tenant submits a payment (lazily materialised
     on dashboard load, not during tenant submission)
     waiting_on at creation: "landlord"
+    needs_landlord_attention at creation: true
     Resolves when: landlord acknowledges
 
   missing_payment:
-    Created when: expected category not submitted past threshold
-    - Rent: X days after rent_due_day (X to be configured)
+    Created when: expected category not submitted past due date
+    - Rent: day after rent_due_day if no submission exists
     - Maintenance/utilities: end of month
     - NOT created if rent_due_day is null
     - First lease month respects lease_start_date
     - Future months never evaluated
-    waiting_on at creation: "landlord"
+    waiting_on at creation: "tenant"
+    needs_landlord_attention at creation: false
     Resolves when: matching payment submitted (auto-resolution)
+    Escalates after 2-day grace period (needs_landlord_attention
+    flips to true; see Missing Payment Thread Lifecycle below)
 
   renewal:
     Created when: lease expiry within configured window
-    (e.g. 90/60/30/15 days) and no open renewal thread exists
+    (e.g. 60 days — see ACTIVE_BUILD.md) and no open renewal
+    thread exists. Not created if lease has an effective
+    termination date before expiry.
     waiting_on at creation: "landlord"
     Resolves when: renewal lease version created (auto-resolution)
 
   general:
     Created manually by landlord.
 
+Thread Uniqueness Model:
+  A thread is uniquely identified by the compound key:
+  lease_group_id + topic_type + topic_ref.
+
+  Deduplication scopes differ by thread type:
+
+  - payment_review: materialise_system_threads() deduplicates
+    against ALL statuses (open + resolved) using its own inline
+    logic. A resolved payment_review thread prevents re-creation.
+    This function does NOT call ensure_thread_exists().
+
+  - missing_payment: materialise_missing_payment_threads() calls
+    ensure_thread_exists(), which deduplicates against OPEN threads
+    only (via find_open_thread()). A resolved missing_payment thread
+    allows re-creation if rent becomes missing again. This is
+    intentional — a resolved thread means rent was submitted; if
+    that payment is later removed, a new thread should appear.
+
 Idempotency Rule:
   Before creating a thread, check if an OPEN thread exists for
   the same (lease_group_id, topic_type, topic_ref).
   If yes → reuse the existing open thread (append message if needed).
   If no → create a new thread.
-  Resolved threads NEVER block new thread creation.
+  Resolved threads NEVER block new thread creation for
+  missing_payment threads. Resolved threads DO block creation
+  for payment_review threads (different dedup scope).
 
 Auto-Resolution:
   The system automatically resolves threads when user actions make
@@ -710,19 +822,99 @@ Auto-Resolution:
   - Landlord acknowledges → payment_review thread resolves
   - Renewal lease created → renewal thread resolves
   Resolution sets status = "resolved", waiting_on = null,
-  resolved_at = current timestamp.
+  resolved_at = current timestamp, needs_landlord_attention = false.
 
 Thread Materialisation:
-  All thread types (payment_review, missing_payment, renewal) are
-  created centrally by materialise_system_threads(), called from
-  the dashboard route during per-lease enrichment.
+  Thread types are created by dedicated materialisation functions
+  called from the dashboard route during per-lease enrichment:
+  - materialise_system_threads() creates payment_review threads
+  - materialise_missing_payment_threads() creates missing_payment
+    threads
   - The tenant submission route writes ONLY to payment_data.json.
     It does NOT create threads directly.
   - This avoids multi-file write coupling and orphan states.
-  - materialise_system_threads() is idempotent, fast, and
+  - Both materialisation functions are idempotent, fast, and
     purely data-driven. No background workers required.
 
-7-Day Nudge:
+----------------------------------------------------------------
+ENGINE EXECUTION MODEL — DASHBOARD-TRIGGERED
+----------------------------------------------------------------
+
+The thread engine runs on every GET / (dashboard load). There is
+no background scheduler, cron job, or async task queue.
+
+Pipeline order (deterministic, runs on every dashboard load):
+
+  Per-lease loop (steps 1–2):
+
+  1. materialise_system_threads(lease_group_id)
+     Creates payment_review threads for unthreaded payments.
+
+  2. materialise_missing_payment_threads(lease_group_id, lease)
+     Creates missing_payment threads for overdue rent.
+
+  Global steps (steps 3–5, run once after all leases processed):
+
+  3. auto_resolve_missing_payment_threads()
+     Resolves open missing_payment threads where a matching
+     rent payment now exists in payment_data.json.
+
+  4. send_missing_payment_reminders()
+     Sends one automatic reminder per thread during days 1–2
+     after the due date (grace period window).
+
+  5. escalate_missing_payment_threads()
+     Escalates threads past the 2-day grace period by setting
+     needs_landlord_attention = true.
+
+Each engine function loads threads.json independently at its
+own entry point, makes changes in memory, and saves once
+(only if it mutated state). After each mutating step, the
+dashboard route reloads thread_data so subsequent steps see
+the latest state.
+
+The pipeline does NOT use a single-load/single-save model
+across the full cycle — each function operates on its own
+load/save cycle. Exception: materialise_missing_payment_threads()
+delegates to ensure_thread_exists(), which loads and saves
+per-thread. A pipeline-wide single-load model is a future
+optimisation, not current behaviour.
+
+GET / is a mutating request:
+  The dashboard route reads AND writes threads.json. This is
+  architectural — the engine is triggered by UI access, not
+  by a background process.
+
+Idempotency guarantees:
+  - Duplicate thread prevention via uniqueness checks
+  - Reminder limited to one per thread (last_reminder_at guard)
+  - Escalation is a one-time flip (needs_landlord_attention guard)
+  - Auto-resolution checks status == "open" before resolving
+  - All five functions are safe on repeated runs
+
+Backlog-collapse behaviour:
+  If no one loads the dashboard for N days, all accumulated
+  logic runs in one deterministic pass on next load. Only
+  current state is evaluated — there is no replay of missed
+  windows. A thread whose grace period has already passed
+  will escalate but will NOT receive a retroactive reminder.
+
+Grace window dependence:
+  Automatic reminders are only sent if the dashboard is loaded
+  during the 2-day grace period window (days 1–2 after due
+  date). If no dashboard load occurs during this window, the
+  reminder is permanently skipped — no replay occurs on later
+  loads. The thread will still escalate on day 3+ regardless.
+
+Future direction:
+  The dashboard-triggered model is expected to be replaced by
+  a scheduler-based model in a future phase. All engine
+  functions are designed to work identically when called by a
+  background scheduler. The transition requires adding a "today"
+  parameter to pipeline functions (see ACTIVE_BUILD.md invariant
+  #10 — NOT YET IMPLEMENTED) and a new trigger mechanism.
+
+7-Day Nudge (DESIGNED — NOT YET IMPLEMENTED):
   Nudges are computed display prompts, NOT stored messages.
   Condition: thread.status == "open" AND waiting_on == "tenant"
   AND last landlord message >= 7 days ago.
@@ -774,19 +966,26 @@ be partially or implicitly implemented without explicit scope
 approval. For details on intent and dependencies, see
 ACTIVE_ROADMAP.md.
 
-Implemented (thread model, locked 2026-02-13):
+Implemented (thread model):
 - Unified thread-based communication engine (threads.json)
-  payment_review threads are fully operational: materialisation,
-  landlord flag/reply/acknowledge, tenant reply, attention badges,
-  thread timelines, smart redirect. All legacy event-based code
-  removed. Legacy landlord_review_data.json architecture deleted.
+  payment_review threads are operational: materialisation,
+  landlord flag/reply/acknowledge, tenant reply, thread timelines,
+  smart redirect. All legacy event-based code removed. Legacy
+  landlord_review_data.json architecture deleted.
+  payment_review threads set needs_landlord_attention = true at
+  creation and sync it via add_message_to_thread() on every
+  message action. They appear in the attention badge and Action
+  Console when waiting_on == "landlord".
+- Missing payment threads for rent (implemented 2026-02-18):
+  materialisation, auto-resolution, automatic reminders (1 max),
+  escalation after 2-day grace period, attention badge integration.
+  See ACTIVE_BUILD.md Phases 1-9.
 
 Designed but not yet implemented:
-- Missing payment threads (replaces standalone reminder system)
+- Missing payment threads for maintenance/utilities
 - Renewal threads (replaces standalone renewal intent prompts)
 - 7-day nudge display (computed, not stored)
-- Auto-resolution hooks for missing_payment and renewal threads
-  (deferred until those thread types are created)
+- Auto-resolution hooks for renewal threads
 
 Not designed / deferred:
 - Dashboard preferences (drag-and-drop ordering, card grouping,
@@ -799,6 +998,195 @@ Not designed / deferred:
 - Historical AI extraction preservation across versions
 - Mobile app
 - Automated backup or recovery
+
+----------------------------------------------------------------
+UI ARCHITECTURE — CONTROL CENTRE MODEL (Phase 10+)
+----------------------------------------------------------------
+
+[Phase 10 — In Progress]
+
+This section describes the UI architecture transition from a
+modal-driven alert model to a persistent Action Console model.
+
+Architectural Principle:
+
+  The app is shifting from:
+
+    "Attention lives inside each lease"
+      (landlord opens a lease, sees a modal listing attention items)
+
+  to:
+
+    "Attention lives globally; leases are containers."
+      (landlord sees all attention items at a glance without
+      opening any lease)
+
+  The Action Console becomes the landlord's operational hub.
+  Lease pages remain contextual and informational.
+
+Separation of Concerns:
+
+  Visibility Layer:
+    - Lease cards (show urgency indicators)
+    - Attention modal (temporary, backward compatibility)
+    - Action Console (primary)
+
+  Decision Layer:
+    - Action Console ONLY
+
+  No business logic should be tied to the attention modal.
+  All decision actions must ultimately live in the Action Console.
+
+------------------------------------------------------------
+1. LANDLORD DASHBOARD (NEW STRUCTURE)
+------------------------------------------------------------
+
+Purpose:
+  Primary operational control centre for landlord.
+
+Desktop Layout (>=1024px):
+  Two-column layout.
+
+  LEFT COLUMN:
+  - Lease cards grid (existing grouped-by-lessor layout)
+  - Each card:
+      - Lifecycle banner (Expired, Terminated) — unchanged
+      - Subtle urgency indicator:
+          Amber = has open attention items
+          Green = zero open attention items
+      - Entire card click filters Action Console to that lease
+      - Explicit "View Lease" link navigates to detail page
+
+  RIGHT COLUMN:
+  - Persistent Global Action Console panel
+  - Sticky positioning (stays in viewport during scroll)
+  - Internally scrollable
+  - Shows ALL attention items across all leases by default
+  - Grouped by lease
+  - Sorted by urgency (highest first)
+  - Read-only in initial implementation (no action buttons)
+
+  Global Alerts box:
+  Removed from dashboard template (replaced by console).
+  get_global_alerts() is still computed and passed to the
+  template but the template no longer renders it. This is
+  dead code in the dashboard context. The underlying helper
+  functions (calculate_lease_expiry_status,
+  calculate_rent_payment_status) are still used in the lease
+  detail view via calculate_reminder_status().
+  get_global_alerts() dashboard integration should be removed
+  in a future cleanup.
+
+Responsive Layout (<1024px):
+  - Layout stacks vertically: lease cards then Action Console
+  - Slide-over mobile console deferred to future phase
+
+------------------------------------------------------------
+2. ATTENTION MODAL STATUS
+------------------------------------------------------------
+
+The attention modal remains temporarily for backward compatibility.
+
+It will:
+- Continue functioning
+- Not receive new action buttons
+- Not gain new responsibilities
+- Be removed in a future refactor once the Action Console
+  supports all workflows (reminders, suppression, review actions)
+
+Smart redirect flows (return_attention_for, return_to=attention)
+remain functional during the transition period.
+
+------------------------------------------------------------
+3. LEASE VIEW (LANDLORD)
+------------------------------------------------------------
+
+Purpose:
+  Deep inspection, audit history, monthly breakdown,
+  payment thread history.
+
+  NOT the primary operational surface.
+  Landlord goes here for detail, not for decisions.
+
+Future intent:
+  Lease View will later adopt a lease-scoped Action Console,
+  but this is not part of the initial Phase 10 implementation.
+
+------------------------------------------------------------
+4. TENANT DASHBOARD (FUTURE ALIGNMENT)
+------------------------------------------------------------
+
+Tenant UI will conceptually mirror the landlord model:
+
+  Desktop:
+    Left:   Lease details
+    Right:  Tenant Action Console
+              - Overdue rent
+              - Submission required
+              - Missing confirmations
+              - Renewal notices
+
+    Above:
+      Ticker:
+        - Days remaining in lease
+        - Next rent due date
+
+  NOT implemented in Phase 10.
+  Backend helpers should be structured for future reuse.
+  Mobile behaviour deferred.
+
+------------------------------------------------------------
+5. ACTION CONSOLE DATA MODEL
+------------------------------------------------------------
+
+The Action Console consumes structured data built by a
+backend helper function. The data shape is:
+
+  {
+    "lease_groups": [
+      {
+        "lease_group_id": str,
+        "lease_id": str,
+        "lease_display_name": str,
+        "attention_count": int,
+        "items": [
+          {
+            "thread_id": str,
+            "topic_type": str,
+            "display_label": str,
+            "reason": str,
+            "urgency_level": str,
+            "expected_amount": int or null,
+            "expected_due_date": str or null,
+            "auto_reminders_suppressed": bool or null
+          }
+        ]
+      }
+    ],
+    "total_open_items": int
+  }
+
+Urgency levels (simple string, not numeric):
+  "high"   — missing_payment, escalated (overdue past grace)
+  "medium" — payment_review, tenant has replied
+  "normal" — payment_review, awaiting initial review
+
+This function aggregates already-computed thread states.
+It does NOT implement escalation or reminder logic.
+All state derives from threads.json.
+
+------------------------------------------------------------
+6. STATE SYNCHRONISATION RULE
+------------------------------------------------------------
+
+When future actions modify threads (send reminder, suppress,
+acknowledge), the Action Console and attention modal must both
+reflect updates automatically. This is guaranteed because:
+
+- Both derive state from threads.json
+- Page reloads after POST redirects
+- No console-specific state exists
+- No duplicated logic between console and modal
 
 ----------------------------------------------------------------
 END OF AUTHORITATIVE CONTEXT
