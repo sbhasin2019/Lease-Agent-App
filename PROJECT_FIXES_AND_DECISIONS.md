@@ -870,6 +870,208 @@ For planned future work, see ACTIVE_ROADMAP.md.
   See PROJECT_CONTEXT.md → UI ARCHITECTURE — CONTROL CENTRE MODEL
   for the authoritative architectural specification.
 
+  2026-02-20  Phase 10C — Action Console Inline Operational Mode
+
+    Decision — pre-computed display fields in backend:
+      Templates must not compute business logic. All derived
+      display values (status_display, status_css, overdue_days)
+      are computed in get_attention_summary_for_lease() and passed
+      to the template as plain strings/numbers. Templates only
+      render pre-computed values.
+
+    Decision — overdue_days gated by escalation_started_at:
+      overdue_days is only computed when the thread has
+      escalation_started_at set. This prevents numeric truthiness
+      bugs (e.g. `if overdue_days:` failing when overdue_days == 0).
+      The escalation state field is the authoritative gate, not
+      the derived numeric value.
+
+    Decision — last_reminder_at set by add_message_to_thread():
+      When a landlord sends a manual reminder (message_type ==
+      "reminder") on a missing_payment thread, add_message_to_thread()
+      sets last_reminder_at on the thread. This permanently blocks
+      automatic reminders (which are gated by last_reminder_at
+      is None). Routes are thin controllers and must not directly
+      mutate thread fields.
+
+    Decision — no inline JavaScript handlers:
+      All event handlers use addEventListener, wrapped in IIFEs.
+      No onclick attributes in HTML. Event delegation on
+      #action-console handles panel toggle and interactions.
+
+    Decision — CSS specificity for console filtering:
+      When filtering console groups by lease card click, the CSS
+      rule `.console-filter-active .console-lease-group { display:
+      none }` hides all groups. The JS must use `style.display =
+      'block'` (not `style.display = ''`) to override this rule,
+      because an empty string does not override a CSS class rule.
+
+    Decision — click outside resets to global view:
+      Clicking anywhere outside lease cards AND outside the
+      Action Console (#action-console) resets the filter to show
+      all lease groups. This replaced the previous "Show All"
+      button approach.
+
+    Bug fix — console goes blank on lease card click:
+      Root cause: CSS specificity. The rule `.console-filter-active
+      .console-lease-group { display: none }` was not overridden
+      by `style.display = ''` set in JavaScript. Fix: changed
+      filterConsoleToLease() to use `style.display = 'block'`
+      for the matching group.
+
+  2026-02-20  Phase 10D — Landlord-Authored Communication Layer
+
+    Decision — lazy DOM lookups for modal wiring:
+      The reminder modal HTML is placed at the bottom of the page
+      (before </body>), but the Action Console IIFE runs earlier
+      in the DOM. Element lookups (getElementById) are performed
+      inside event handlers at click time, not at IIFE execution
+      time. This avoids null references from eager lookups before
+      the modal exists in the DOM.
+
+    Decision — draft text uses full names, no first-name parsing:
+      lessee_name and lessor_name are passed to the modal as-is
+      from lease current_values. No split-on-space logic. Company
+      names (e.g. "Formula Live Rentals LLP") render correctly.
+      Empty string fallback if name is null/missing.
+
+    Decision — backend validates non-empty body:
+      thread_send_reminder() strips whitespace from form body and
+      aborts 400 if empty. This prevents blank reminders. No flash
+      messages — the 400 is a hard guard, not a UX flow.
+
+    Decision — names loaded inside get_attention_summary_for_lease():
+      The function loads the current lease via _load_all_leases()
+      to read lessee_name and lessor_name from current_values.
+      Names are added to every item dict once per function call
+      (single lease lookup, not per-thread). This keeps the
+      function self-contained without changing its signature.
+
+  2026-02-20  Phase 10E — Payment Review Actions
+
+    Decision — use existing message_type values for review actions:
+      Acknowledge uses message_type="acknowledge" (existing
+      transition: status=resolved, waiting_on=None, resolved_at=now).
+      Flag uses message_type="flag" (existing transition:
+      waiting_on=tenant). No new message types invented.
+      add_message_to_thread() unchanged.
+
+    Decision — explicit needs_landlord_attention clear:
+      Both routes perform a second load-save after
+      add_message_to_thread() to set needs_landlord_attention=False.
+      Although add_message_to_thread() already handles this for
+      payment_review threads (lines 1193-1201), the explicit
+      second pass was mandated for belt-and-suspenders safety.
+
+    Decision — flag modal has no prefilled text:
+      The flag modal textarea starts empty. Unlike acknowledge
+      (which has a confirmation message) and reminder (which has
+      a greeting + body + closing), the flag action requires the
+      landlord to articulate what clarification is needed. No
+      generic prefill would be useful.
+
+    Decision — action buttons in collapsed item row:
+      Primary action buttons (Send Reminder, Acknowledge, Flag)
+      render in .console-item-actions within the collapsed row,
+      not inside the expanded panel. This gives immediate button
+      visibility without requiring the user to expand the panel.
+      The expanded panel now contains only thread history,
+      secondary details, and View Full History placeholder.
+
+    Decision — toggle guard for action buttons:
+      The panel toggle handler checks e.target.closest(
+      '.console-item-actions') and returns early if matched.
+      This prevents button clicks from also toggling the
+      expanded panel. Modal open handlers (delegated on document)
+      still fire normally because they are separate listeners.
+
+2026-02-20  Phase 10F — Reminder Safeguards
+
+  Decision — 24h cooldown uses datetime.utcnow():
+    last_reminder_at is stored in UTC. The cooldown comparison
+    must use datetime.utcnow(), not datetime.now(), to prevent
+    incorrect cooldown behaviour from timezone mismatch.
+
+  Decision — frontend follow-up detection is session-aware:
+    Modal JS reads data-last-reminder-at from the button and
+    computes daysSince. Three tiers: blocked (<1 day), warning
+    with follow-up wording (1-5 days), standard draft (>5 days
+    or no prior reminder). Jinja renders Python None as string
+    "None"; JS handles with !== 'None' check.
+
+2026-02-20  Dashboard Visual Refinements
+
+  Decision — lease-dominant column ratio:
+    Changed grid-template-columns from 1fr 1fr to 1.6fr 0.9fr
+    with gap 32px. Lease column is visually dominant (~64%).
+
+  Decision — 2-column lease card grid:
+    Lease cards use repeat(2, minmax(0, 1fr)) within the lease
+    column. max-width: 520px prevents cards from stretching.
+    Responsive fallback to single column at 900px.
+
+  Decision — server-side landlord filter:
+    Filtering is entirely server-side (no JavaScript). Backend
+    reads ?landlord= query param, filters grouped_leases dict
+    and console_leases list before passing to template and
+    get_global_attention_summary(). Dropdown only rendered when
+    all_lessor_names has >1 entry. Invalid/unknown values fall
+    back to "all".
+
+  Decision — removed "Needs Attention" button from dashboard cards:
+    UI-only removal. Backend attention logic, _attention_count,
+    _attention_items all preserved. Lease detail view button
+    preserved. The Action Console replaces per-card attention
+    buttons on the dashboard.
+
+  Decision — removed "Lease started on" subtitle from cards:
+    UI-only removal. lease_start_date data preserved in backend.
+    .lease-card-subtitle CSS rule kept (reduced margin) in case
+    referenced elsewhere.
+
+  Decision — removed dashboard compact card overrides:
+    The .dashboard-cards-col override block (scale 0.8, padding
+    8px, font-size 13px, etc.) was from the old compact card
+    design. It was overriding all typography changes with higher
+    CSS specificity. Entire block removed.
+
+  Decision — lifecycle ribbons replaced by stamp overlays:
+    Old full-width amber ribbons (.lease-card-terminated-ribbon,
+    .lease-card-expired-ribbon) replaced by diagonal stamp
+    overlays (.lease-card-stamp). Stamps use 26px/900 weight,
+    4px solid red border (#dc2626), rotate(-20deg), no
+    background, vertically positioned to avoid overlapping
+    primary CTAs (the renewal button must remain fully legible
+    and operable). Both EXPIRED and TERMINATED use the same
+    stamp style.
+
+  Decision — nickname background fill:
+    All lease card titles have light grey background (#f3f4f6).
+    Colored backgrounds for expired/terminated removed — the
+    stamp overlay is the sole lifecycle indicator. This avoids
+    visual competition between nickname and stamp.
+
+  Decision — Action Console accent bars:
+    Console items use ::before pseudo-element with left accent
+    bars. Amber (#f59e0b) for missing_payment, blue (#3b82f6)
+    for payment_review. data-topic-type attribute on HTML
+    element enables CSS selector targeting.
+
+2026-02-20  Header Rebrand and Visual Polish
+
+  Decision — MapMyLease header upgrade:
+    Replaced old .page-header with .mapmylease-banner. White
+    background, 1px bottom border, 3px dark accent bar at top
+    via ::before pseudo-element. Title: 24px/700, #111827.
+    Subtitle: 14px, #6b7280. Page <title> and <h1> updated
+    from "Easemylease" to "MapMyLease".
+
+  Decision — stamp size reduced ~10%:
+    Both EXPIRED and TERMINATED stamps reduced from 26px/4px
+    border/8px padding to 23px/3px border/7px padding. Both
+    stamps now use identical styling. Keeps stamps visible
+    without dominating the card.
+
 ----------------------------------------------------------------
 END OF HISTORICAL LOG
 ----------------------------------------------------------------

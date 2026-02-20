@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Easemylease</title>
+    <title>MapMyLease</title>
     <!-- PDF.js library for rendering PDFs in modal -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -38,8 +38,8 @@
         /* Two-column dashboard layout */
         .dashboard-two-col {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
+            grid-template-columns: 1.6fr 0.9fr;
+            gap: 32px;
             align-items: start;
         }
         @media (max-width: 1024px) {
@@ -54,10 +54,12 @@
         .action-console {
             position: sticky;
             top: 20px;
-            background: #fff;
+            background: #ffffff;
             border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            margin-bottom: 28px;
             max-height: calc(100vh - 40px);
             overflow-y: auto;
         }
@@ -74,9 +76,8 @@
             justify-content: space-between;
         }
         .action-console-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
-            letter-spacing: 0.3px;
             color: #111827;
         }
         .action-console-count {
@@ -113,27 +114,40 @@
             padding: 10px 20px 4px;
         }
         .console-item {
+            position: relative;
             display: flex;
             align-items: flex-start;
             gap: 10px;
-            padding: 8px 20px;
+            padding: 14px 16px 14px 18px;
             font-size: 13px;
             color: #374151;
-            transition: background 0.1s;
+            border-radius: 8px;
+            transition: background 0.12s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        .console-item::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 8px;
+            bottom: 8px;
+            width: 4px;
+            border-radius: 4px;
+            background: transparent;
+        }
+        .console-item[data-topic-type="missing_payment"]::before {
+            background: #f59e0b;
+        }
+        .console-item[data-topic-type="payment_review"]::before {
+            background: #3b82f6;
         }
         .console-item:hover {
             background: #f9fafb;
         }
-        .console-item-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            margin-top: 5px;
+        .console-item.console-item-expanded {
+            background: #f9fafb;
         }
-        .console-item-dot.urgency-high { background: #ef4444; }
-        .console-item-dot.urgency-medium { background: #f59e0b; }
-        .console-item-dot.urgency-normal { background: #9ca3af; }
         .console-item-text {
             flex: 1;
             min-width: 0;
@@ -147,6 +161,147 @@
             color: #9ca3af;
             margin-top: 1px;
         }
+        .console-item-status {
+            font-size: 12px;
+            color: #b45309;
+            margin-top: 2px;
+            font-weight: 500;
+        }
+        .console-item-status.status-normal {
+            color: #6b7280;
+            font-weight: 400;
+        }
+        .console-item-last-action {
+            font-size: 11px;
+            color: #b0b0b0;
+            margin-top: 2px;
+        }
+        .console-item-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .console-item-chevron {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            margin-top: 0;
+            font-size: 20px;
+            line-height: 32px;
+            text-align: center;
+            color: #6b7280;
+            transition: transform 0.2s ease, color 0.15s ease;
+            border-radius: 6px;
+        }
+        .console-item:hover .console-item-chevron {
+            color: #111827;
+        }
+        .console-item-expanded .console-item-chevron {
+            transform: rotate(90deg);
+        }
+        /* Expanded inline panel */
+        .console-expanded-panel {
+            display: none;
+            padding: 12px 20px 16px 38px;
+            background: #fafbfc;
+            border-top: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .console-expanded-panel.panel-open {
+            display: block;
+        }
+        .console-panel-header {
+            margin-bottom: 12px;
+        }
+        .console-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0 0 4px 0;
+        }
+        .console-panel-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .console-panel-meta span {
+            margin-right: 12px;
+        }
+        .console-panel-escalation {
+            color: #b45309;
+            font-weight: 500;
+        }
+        /* Recent activity messages */
+        .console-recent-activity {
+            margin-bottom: 12px;
+        }
+        .console-recent-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .console-msg {
+            padding: 6px 10px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            background: #fff;
+            border: 1px solid #f0f0f0;
+            font-size: 12px;
+        }
+        .console-msg:last-child {
+            margin-bottom: 0;
+        }
+        .console-msg-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+        .console-msg-actor {
+            font-weight: 600;
+            font-size: 11px;
+            color: #374151;
+            text-transform: capitalize;
+        }
+        .console-msg-actor.actor-system { color: #6b7280; }
+        .console-msg-actor.actor-tenant { color: #2563eb; }
+        .console-msg-actor.actor-landlord { color: #059669; }
+        .console-msg-time {
+            font-size: 10px;
+            color: #b0b0b0;
+        }
+        .console-msg-body {
+            color: #4b5563;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+        .console-msg-type {
+            font-size: 10px;
+            color: #9ca3af;
+            font-style: italic;
+        }
+        /* View Full History button */
+        .console-panel-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-view-history {
+            font-size: 12px;
+            color: #2563eb;
+            background: none;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 4px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .btn-view-history:hover {
+            background: #eff6ff;
+        }
         .console-filter-active .console-lease-group {
             display: none;
         }
@@ -154,33 +309,136 @@
             display: block;
         }
 
+        /* Reminder modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .modal-container {
+            background: #fff;
+            width: 520px;
+            max-width: 90%;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #6b7280;
+            line-height: 1;
+        }
+        .modal-textarea {
+            width: 100%;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .btn-secondary {
+            font-size: 13px;
+            padding: 6px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #374151;
+            cursor: pointer;
+        }
+        .btn-primary {
+            font-size: 13px;
+            padding: 6px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: #fff;
+            cursor: pointer;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        /* Review action buttons */
+        .btn-review-ack {
+            font-size: 12px;
+            color: #fff;
+            background: #16a34a;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .btn-review-ack:hover {
+            background: #15803d;
+        }
+        .btn-review-flag {
+            font-size: 12px;
+            color: #fff;
+            background: #dc2626;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .btn-review-flag:hover {
+            background: #b91c1c;
+        }
+
         /* Page header */
-        .page-header {
+        .mapmylease-banner {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 22px 36px;
             margin-bottom: 32px;
             position: relative;
         }
-        .page-header::before {
-            content: '';
+        .mapmylease-banner::before {
+            content: "";
+            display: block;
+            height: 3px;
+            background: #111827;
             position: absolute;
-            top: -40px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 600px;
-            height: 200px;
-            background: radial-gradient(ellipse at center, rgba(99, 132, 227, 0.06) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: -1;
+            top: 0;
+            left: 0;
+            right: 0;
         }
-        .page-header h1 {
-            font-size: 32px;
+        .mapmylease-title {
+            font-size: 24px;
             font-weight: 700;
-            color: #1a1a2e;
-            margin: 0 0 8px 0;
+            letter-spacing: 0.5px;
+            color: #111827;
+            margin: 0 0 6px 0;
         }
-        .page-header p {
+        .mapmylease-subtitle {
+            font-size: 14px;
             color: #6b7280;
             margin: 0;
-            font-size: 16px;
         }
 
         /* Card component */
@@ -1524,17 +1782,35 @@
             border-color: #fbbf24;
         }
 
-        /* Dashboard: lifecycle ribbon (TERMINATED / EXPIRED) */
-        .lease-card-terminated-ribbon,
-        .lease-card-expired-ribbon {
-            background: #f59e0b;
-            color: #fff;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
+        /* Dashboard: lease state stamp overlay */
+        .lease-card-stamp {
+            position: absolute;
+            top: 38%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 26px;
+            font-weight: 900;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            padding: 6px 0;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .lease-card-stamp.terminated {
+            color: #dc2626;
+            transform: translate(-50%, -50%) rotate(-20deg);
+            background: none;
+            border: 3px solid #dc2626;
+            padding: 7px 18px;
+            font-size: 23px;
+        }
+        .lease-card-stamp.expired {
+            color: #dc2626;
+            transform: translate(-50%, -50%) rotate(-20deg);
+            background: none;
+            border: 3px solid #dc2626;
+            padding: 7px 18px;
+            font-size: 23px;
         }
 
         /* ========================================
@@ -2066,9 +2342,29 @@
         }
         .leases-dashboard-header {
             display: flex;
-            align-items: baseline;
-            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 24px;
+        }
+        .leases-dashboard-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .landlord-filter-form {
+            margin: 0;
+        }
+        .landlord-filter-select {
+            font-size: 13px;
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #374151;
+            cursor: pointer;
+        }
+        .landlord-filter-select:hover {
+            border-color: #9ca3af;
         }
         .leases-dashboard h3 {
             font-size: 22px;
@@ -2083,50 +2379,20 @@
         }
         .leases-grid {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
         }
-        @media (max-width: 640px) {
+        @media (max-width: 900px) {
             .leases-grid {
                 grid-template-columns: 1fr;
             }
         }
-        /* Dashboard-only compact card overrides */
-        .dashboard-cards-col .leases-grid {
-            gap: 8px;
-        }
-        .dashboard-cards-col .lease-card {
-            padding: 8px;
-            border-radius: 8px;
-            box-shadow: none;
-            border: 1px solid #e5e7eb;
-            transform: scale(0.8);
-            transform-origin: top left;
-        }
-        .dashboard-cards-col .lease-card-title {
-            font-size: 13px;
-        }
-        .dashboard-cards-col .lease-card-subtitle {
-            margin-bottom: 6px;
-        }
-        .dashboard-cards-col .lease-card-body {
-            padding-bottom: 4px;
-            gap: 4px;
-        }
-        .dashboard-cards-col .lease-card-rent {
-            margin-top: 4px;
-        }
-        .dashboard-cards-col .btn-view-lease,
-        .dashboard-cards-col .btn-renew-primary {
-            padding: 4px 8px;
-            margin-top: 4px;
-        }
         .lease-card {
             position: relative;
             background: #fff;
-            border-radius: 12px;
+            border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
-            padding: 16px;
+            padding: 12px;
             text-decoration: none;
             color: inherit;
             display: flex;
@@ -2134,6 +2400,9 @@
             transition: box-shadow 0.15s, border-color 0.15s;
             border: 1px solid #e5e7eb;
             cursor: default;
+            max-width: 520px;
+            width: 100%;
+            overflow: hidden;
         }
         .lease-card:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -2337,31 +2606,29 @@
             margin-bottom: 0;
         }
         .landlord-group-header {
-            font-size: 15px;
-            font-weight: 500;
-            color: #6b7280;
-            margin-bottom: 16px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e5e7eb;
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #f3f4f6;
         }
 
-        .btn-upload-new {
+        .btn-upload-lease {
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #2563eb;
+            background: #ffffff;
+            color: #2563eb;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 12px 20px;
-            background: #3b82f6;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            text-decoration: none;
-            cursor: pointer;
-            transition: background 0.15s;
         }
-        .btn-upload-new:hover {
-            background: #2563eb;
+        .btn-upload-lease:hover {
+            background: #eff6ff;
         }
 
         /* Dashboard Lease Cards */
@@ -2375,30 +2642,17 @@
             flex-direction: column;
         }
         .lease-card-title {
-            font-weight: 600;
-            font-size: 16px;
+            font-weight: 700;
+            font-size: 18px;
             color: #1a1a2e;
-            line-height: 1.3;
-            margin-bottom: 2px;
-            padding-right: 120px;  /* Space for attention badge */
+            line-height: 1.25;
+            margin-bottom: 6px;
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #f3f4f6;
         }
-        .lease-card-attention {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 13px;
-            font-weight: 500;
-            line-height: 1.3;
-            letter-spacing: 0.02em;
-            color: #6b7280;
-            text-decoration: none;
-            cursor: pointer;
-            background: none;
-            border: none;
-        }
-        .lease-card-attention:hover {
-            text-decoration: underline;
-        }
+
         .lease-card-attention-icon {
             display: inline-block;
             animation: attention-wave 1.5s ease-in-out infinite;
@@ -2557,15 +2811,15 @@
         .lease-card-subtitle {
             font-size: 12px;
             color: #9ca3af;
-            margin-bottom: 14px;
+            margin-bottom: 4px;
         }
 
         /* Two-column body: tenant (left) + expiry (right) */
         .lease-card-body {
             display: flex;
             justify-content: space-between;
-            gap: 12px;
-            padding-bottom: 12px;
+            gap: 5px;
+            padding-bottom: 8px;
             border-bottom: 1px solid #f3f4f6;
         }
         .lease-card-body-left {
@@ -2579,7 +2833,7 @@
 
         /* Tenant info (left column) */
         .lease-card-tenant-name {
-            font-size: 14px;
+            font-size: 11px;
             font-weight: 500;
             color: #374151;
             line-height: 1.3;
@@ -2601,7 +2855,7 @@
             letter-spacing: 0.02em;
         }
         .lease-card-expiry-value {
-            font-size: 26px;
+            font-size: 12px;
             font-weight: 700;
             color: #374151;
             line-height: 1.15;
@@ -2609,7 +2863,7 @@
         .lease-card-expiry-date {
             font-size: 11px;
             color: #9ca3af;
-            margin-top: 1px;
+            margin-bottom: 4px;
         }
         .lease-card-expiry-none {
             font-size: 12px;
@@ -2619,7 +2873,7 @@
 
         /* Monthly rent — calm, rewarding secondary signal */
         .lease-card-rent {
-            margin-top: 10px;
+            margin-top: 6px;
             font-size: 12px;
             color: #6b7280;
         }
@@ -2633,8 +2887,8 @@
         .btn-view-lease {
             display: block;
             width: 100%;
-            padding: 10px 16px;
-            margin-top: 12px;
+            padding: 6px 14px;
+            margin-top: 10px;
             background: #f8f9fa;
             color: #374151;
             border: 1px solid #e5e7eb;
@@ -2655,7 +2909,7 @@
         .btn-renew-primary {
             display: block;
             width: 100%;
-            padding: 10px 16px;
+            padding: 6px 14px;
             background: #059669;
             color: #fff;
             border: none;
@@ -2752,9 +3006,9 @@
 </head>
 <body>
 <div class="container{% if show_dashboard %} dashboard-wide{% endif %}">
-    <div class="page-header">
-        <h1>Easemylease</h1>
-        <p>Welcome! This app will help you track your lease details.</p>
+    <div class="mapmylease-banner">
+        <h1 class="mapmylease-title">MapMyLease</h1>
+        <p class="mapmylease-subtitle">We help you track your lease.</p>
     </div>
 
     <!-- Flash messages -->
@@ -2774,27 +3028,38 @@
     <div class="dashboard-cards-col">
         {% if leases and leases|length > 0 %}
         <div class="leases-dashboard-header">
-            <h3>Your Leases</h3>
-            <span class="leases-dashboard-count">{{ leases|length }} lease{% if leases|length != 1 %}s{% endif %}</span>
+            <div class="leases-dashboard-title">
+                <h3>Your Leases</h3>
+                <span class="leases-dashboard-count">{{ leases|length }} lease{% if leases|length != 1 %}s{% endif %}</span>
+                {% if all_lessor_names|length > 1 %}
+                <form method="GET" class="landlord-filter-form">
+                    <select name="landlord" onchange="this.form.submit()" class="landlord-filter-select">
+                        <option value="all" {% if selected_landlord == "all" %}selected{% endif %}>All Landlords</option>
+                        {% for name in all_lessor_names %}
+                        <option value="{{ name }}" {% if selected_landlord == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% endif %}
+            </div>
+            <a href="/?new=true" class="btn-upload-lease">+ Upload New Lease</a>
         </div>
-        <a href="/?new=true" class="btn-upload-new">+ Upload New Lease</a>
         {% for lessor_name, lessor_leases in grouped_leases.items() %}
         <div class="landlord-group">
-            <div class="landlord-group-header">{{ lessor_name }}</div>
+            <div class="landlord-group-header">{{ lessor_name }} ({{ lessor_leases|length }})</div>
             <div class="leases-grid">
                 {% for lease in lessor_leases %}
                 {% set lcv = lease.current_values if lease.current_values else lease %}
                 {% set days_remaining = lcv.lease_end_date | days_until %}
-                <div class="lease-card">
-                    {% if lease._attention_count %}<button type="button" onclick="openAttentionModal('{{ lease.id }}')" class="lease-card-attention" aria-label="View months needing attention for {{ lcv.lease_nickname or 'this lease' }}"><span class="lease-card-attention-icon">🙋🏻</span> Needs attention</button>{% endif %}
+                <div class="lease-card" data-lease-id="{{ lease.lease_group_id }}">
+
                     {% if lease._is_terminated %}
-                    <div class="lease-card-terminated-ribbon">TERMINATED</div>
+                    <div class="lease-card-stamp terminated">TERMINATED</div>
                     {% elif lease._is_expired %}
-                    <div class="lease-card-expired-ribbon">EXPIRED</div>
+                    <div class="lease-card-stamp expired">EXPIRED</div>
                     {% endif %}
                     <div class="lease-card-content">
-                        <div class="lease-card-title">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
-                        <div class="lease-card-subtitle">{% if lease._earliest_start_date %}Lease started on {{ lease._earliest_start_date | format_date }}{% else %}Start date unknown{% endif %}</div>
+                        <div class="lease-card-title {% if lease._is_terminated %}terminated{% elif lease._is_expired %}expired{% endif %}">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
                         <div class="lease-card-body">
                             <div class="lease-card-body-left">
                                 <div class="lease-card-tenant-name">{{ lcv.lessee_name or '—' }}</div>
@@ -2874,7 +3139,7 @@
         <div class="dashboard-empty">
             <h3>No leases yet</h3>
             <p>Upload a lease document to start tracking<br>important dates and payment reminders.</p>
-            <a href="/?new=true" class="btn-upload-new">+ Upload Your First Lease</a>
+            <a href="/?new=true" class="btn-upload-lease">+ Upload Your First Lease</a>
         </div>
         {% endif %}
 
@@ -2911,11 +3176,72 @@
             <div class="console-lease-group" data-lease-id="{{ group.lease_group_id }}">
                 <div class="console-lease-name">{{ group.lease_display_name }}</div>
                 {% for item in group['items'] %}
-                <div class="console-item">
-                    <span class="console-item-dot urgency-{{ item.urgency_level }}"></span>
+                <div class="console-item" data-thread-id="{{ item.thread_id }}" data-topic-type="{{ item.topic_type }}">
                     <div class="console-item-text">
                         <div class="console-item-label">{{ item.display_label }}</div>
-                        <div class="console-item-reason">{{ item.reason }}</div>
+                        <div class="console-item-status {{ item.status_css }}">{{ item.status_display }}</div>
+                        {% if item.last_action %}
+                        <div class="console-item-last-action">{{ item.last_action.summary_text }} · {{ item.last_action.timestamp | format_date }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="console-item-actions">
+                        {% if item.topic_type == "missing_payment" %}
+                        <button type="button"
+                                class="btn-view-history btn-open-reminder-modal"
+                                data-thread-id="{{ item.thread_id }}"
+                                data-lessee-name="{{ item.lessee_name }}"
+                                data-lessor-name="{{ item.lessor_name }}"
+                                data-open-month="{{ item.open_month }}"
+                                data-last-reminder-at="{{ item.last_reminder_at }}">
+                            Send Reminder
+                        </button>
+                        {% elif item.topic_type == "payment_review" %}
+                        <button type="button"
+                                class="btn-review-ack"
+                                data-thread-id="{{ item.thread_id }}"
+                                data-lessee-name="{{ item.lessee_name }}"
+                                data-lessor-name="{{ item.lessor_name }}">
+                            Acknowledge
+                        </button>
+                        <button type="button"
+                                class="btn-review-flag"
+                                data-thread-id="{{ item.thread_id }}">
+                            Flag
+                        </button>
+                        {% endif %}
+                    </div>
+                    <span class="console-item-chevron">&#x25B8;</span>
+                </div>
+                <div class="console-expanded-panel" id="panel-{{ item.thread_id }}">
+                    <div class="console-panel-header">
+                        <div class="console-panel-title">{{ item.display_label }}</div>
+                        <div class="console-panel-meta">
+                            {% if item.expected_due_date %}<span>Due: {{ item.expected_due_date | format_date }}</span>{% endif %}
+                            {% if item.expected_amount %}<span>Expected: &#8377;{{ item.expected_amount | format_money }}</span>{% endif %}
+                            {% if item.escalation_started_at %}<span class="console-panel-escalation">Escalated on {{ item.escalation_started_at | format_date }}</span>{% endif %}
+                            {% if item.auto_reminders_suppressed %}<span style="color: #9ca3af; font-style: italic;">Auto reminders stopped</span>{% endif %}
+                        </div>
+                    </div>
+                    {% if item.recent_messages %}
+                    <div class="console-recent-activity">
+                        <div class="console-recent-label">Recent activity</div>
+                        {% for msg in item.recent_messages %}
+                        <div class="console-msg">
+                            <div class="console-msg-header">
+                                <span class="console-msg-actor actor-{{ msg.actor }}">{{ msg.actor }}</span>
+                                <span class="console-msg-time">{{ msg.created_at | format_date }}</span>
+                            </div>
+                            {% if msg.body %}
+                            <div class="console-msg-body">{{ msg.body }}</div>
+                            {% else %}
+                            <div class="console-msg-type">{{ msg.message_type | replace('_', ' ') | title }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="console-panel-actions">
+                        <button type="button" class="btn-view-history" disabled>View Full History</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -2928,6 +3254,341 @@
             {% endif %}
         </div>
     </div>
+    <script>
+    (function() {
+        var consoleEl = document.getElementById('action-console');
+        if (!consoleEl) return;
+
+        // --- Panel toggle (one-at-a-time) ---
+        consoleEl.addEventListener('click', function(e) {
+            // Skip toggle if click is on an action button
+            if (e.target.closest('.console-item-actions')) return;
+
+            var row = e.target.closest('.console-item');
+            if (!row) return;
+
+            var threadId = row.getAttribute('data-thread-id');
+            if (!threadId) return;
+
+            var panel = document.getElementById('panel-' + threadId);
+            if (!panel) return;
+
+            var isOpen = panel.classList.contains('panel-open');
+
+            // Close any currently open panel
+            var openPanels = consoleEl.querySelectorAll('.console-expanded-panel.panel-open');
+            for (var i = 0; i < openPanels.length; i++) {
+                openPanels[i].classList.remove('panel-open');
+            }
+            var expandedRows = consoleEl.querySelectorAll('.console-item-expanded');
+            for (var i = 0; i < expandedRows.length; i++) {
+                expandedRows[i].classList.remove('console-item-expanded');
+            }
+
+            // If it was closed, open it
+            if (!isOpen) {
+                panel.classList.add('panel-open');
+                row.classList.add('console-item-expanded');
+            }
+        });
+
+        // --- Lease card → console filter ---
+        var currentFilterId = null;
+
+        function filterConsoleToLease(leaseId) {
+            consoleEl.classList.add('console-filter-active');
+
+            var groups = consoleEl.querySelectorAll('.console-lease-group');
+            for (var i = 0; i < groups.length; i++) {
+                var group = groups[i];
+
+                if (group.getAttribute('data-lease-id') === leaseId) {
+                    group.style.display = 'block';
+                } else {
+                    group.style.display = 'none';
+                }
+            }
+        }
+
+        function resetConsoleFilter() {
+            consoleEl.classList.remove('console-filter-active');
+            var groups = consoleEl.querySelectorAll('.console-lease-group');
+            for (var i = 0; i < groups.length; i++) {
+                groups[i].style.display = '';
+            }
+            // Collapse any open panels
+            var openPanels = consoleEl.querySelectorAll('.panel-open');
+            for (var i = 0; i < openPanels.length; i++) {
+                openPanels[i].classList.remove('panel-open');
+            }
+            var expandedRows = consoleEl.querySelectorAll('.console-item-expanded');
+            for (var i = 0; i < expandedRows.length; i++) {
+                expandedRows[i].classList.remove('console-item-expanded');
+            }
+        }
+
+        var leaseCards = document.querySelectorAll('.lease-card[data-lease-id]');
+        for (var i = 0; i < leaseCards.length; i++) {
+            leaseCards[i].addEventListener('click', function(e) {
+                // Don't filter if clicking a link or button inside the card
+                if (e.target.closest('a') || e.target.closest('button')) return;
+
+                var leaseId = this.getAttribute('data-lease-id');
+                if (!leaseId) return;
+
+                if (currentFilterId === leaseId) {
+                    currentFilterId = null;
+                    resetConsoleFilter();
+                } else {
+                    currentFilterId = leaseId;
+                    filterConsoleToLease(leaseId);
+                }
+            });
+        }
+
+        // Click outside lease cards AND outside console resets to global
+        document.addEventListener('click', function(e) {
+            if (!currentFilterId) return;
+
+            if (e.target.closest('.lease-card')) return;
+            if (e.target.closest('#action-console')) return;
+
+            currentFilterId = null;
+            resetConsoleFilter();
+        });
+
+        // --- Reminder modal wiring (Phase 10D Step 3) ---
+        // Element lookups are lazy (inside handlers) because the modal
+        // HTML is at the bottom of the page, after this script runs.
+
+        // Open modal
+        document.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.btn-open-reminder-modal');
+            if (!trigger) return;
+
+            var modal = document.getElementById('reminder-modal');
+            var form = document.getElementById('reminder-modal-form');
+            var body = document.getElementById('reminder-body');
+            var threadInput = document.getElementById('reminder-thread-id');
+            if (!modal || !form || !body || !threadInput) return;
+
+            var threadId = trigger.getAttribute('data-thread-id');
+            var lesseeName = trigger.getAttribute('data-lessee-name') || '';
+            var lessorName = trigger.getAttribute('data-lessor-name') || '';
+            var openMonth = trigger.getAttribute('data-open-month') || '';
+            var lastReminderAt = trigger.getAttribute('data-last-reminder-at') || '';
+
+            // Compute days since last reminder
+            var daysSince = -1;
+            if (lastReminderAt && lastReminderAt !== 'None') {
+                var lastDt = new Date(lastReminderAt);
+                if (!isNaN(lastDt.getTime())) {
+                    daysSince = (Date.now() - lastDt.getTime()) / 86400000;
+                }
+            }
+
+            // Block if < 1 day (backend also blocks at 24h)
+            if (daysSince >= 0 && daysSince < 1) return;
+
+            var warning = document.getElementById('reminder-modal-warning');
+
+            var greeting = lesseeName ? ("Dear " + lesseeName + ",") : "Hi,";
+            var closing = lessorName ? ("\n\nMany thanks,\n" + lessorName)
+                                     : "\n\nMany thanks,";
+
+            var draft;
+            if (daysSince >= 0 && daysSince <= 5) {
+                // Follow-up wording
+                var daysAgo = Math.floor(daysSince);
+                var dayWord = daysAgo === 1 ? "day" : "days";
+                if (warning) {
+                    warning.textContent = "A reminder was sent " + daysAgo + " " + dayWord + " ago.";
+                    warning.style.display = "block";
+                }
+                draft =
+                    greeting + "\n\n" +
+                    "I am following up on my previous reminder regarding the rent for the month of " +
+                    openMonth +
+                    ", as the payment update is still pending.\n" +
+                    "I would appreciate it if you could look into this at your earliest convenience." +
+                    closing;
+            } else {
+                // First reminder wording
+                if (warning) {
+                    warning.textContent = "";
+                    warning.style.display = "none";
+                }
+                draft =
+                    greeting + "\n\n" +
+                    "I see that the payment update for rent for the month of " +
+                    openMonth +
+                    " is pending. Could I please request you to update this at your earliest convenience." +
+                    closing;
+            }
+
+            body.value = draft;
+            threadInput.value = threadId;
+            form.action = "/thread/" + threadId + "/reminder";
+
+            modal.style.display = "flex";
+        });
+
+        // Close modal helper
+        function closeReminderModal() {
+            var modal = document.getElementById('reminder-modal');
+            var form = document.getElementById('reminder-modal-form');
+            var body = document.getElementById('reminder-body');
+            var threadInput = document.getElementById('reminder-thread-id');
+            var warning = document.getElementById('reminder-modal-warning');
+            if (!modal) return;
+            modal.style.display = "none";
+            if (body) body.value = "";
+            if (threadInput) threadInput.value = "";
+            if (form) form.action = "";
+            if (warning) { warning.textContent = ""; warning.style.display = "none"; }
+        }
+
+        // Close on X or Cancel (delegated on document)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('#close-reminder-modal') ||
+                e.target.closest('#cancel-reminder-modal')) {
+                closeReminderModal();
+                return;
+            }
+            // Close on overlay click
+            var modal = document.getElementById('reminder-modal');
+            if (modal && e.target === modal) {
+                closeReminderModal();
+            }
+        });
+
+        // Close on ESC key (all modals)
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== "Escape") return;
+            var reminderM = document.getElementById('reminder-modal');
+            if (reminderM && reminderM.style.display === "flex") {
+                closeReminderModal();
+                return;
+            }
+            var ackM = document.getElementById('review-ack-modal');
+            if (ackM && ackM.style.display === "flex") {
+                closeReviewAckModal();
+                return;
+            }
+            var flagM = document.getElementById('review-flag-modal');
+            if (flagM && flagM.style.display === "flex") {
+                closeReviewFlagModal();
+            }
+        });
+
+        // --- Review Acknowledge modal wiring (Phase 10E Step 3) ---
+
+        // Open modal
+        document.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.btn-review-ack');
+            if (!trigger) return;
+
+            var modal = document.getElementById('review-ack-modal');
+            var form = document.getElementById('review-ack-form');
+            var body = document.getElementById('review-ack-body');
+            var threadInput = document.getElementById('review-ack-thread-id');
+            if (!modal || !form || !body || !threadInput) return;
+
+            var threadId = trigger.getAttribute('data-thread-id');
+            var lesseeName = trigger.getAttribute('data-lessee-name') || '';
+            var lessorName = trigger.getAttribute('data-lessor-name') || '';
+
+            var greeting = lesseeName ? ("Dear " + lesseeName + ",") : "Hi,";
+            var closing = lessorName ? ("\n\nMany thanks,\n" + lessorName)
+                                     : "\n\nMany thanks,";
+
+            var draft =
+                greeting + "\n\n" +
+                "I confirm that I have reviewed your recent payment submission and everything is in order." +
+                closing;
+
+            body.value = draft;
+            threadInput.value = threadId;
+            form.action = "/thread/" + threadId + "/review/acknowledge";
+
+            modal.style.display = "flex";
+        });
+
+        // Close modal helper
+        function closeReviewAckModal() {
+            var modal = document.getElementById('review-ack-modal');
+            var form = document.getElementById('review-ack-form');
+            var body = document.getElementById('review-ack-body');
+            var threadInput = document.getElementById('review-ack-thread-id');
+            if (!modal) return;
+            modal.style.display = "none";
+            if (body) body.value = "";
+            if (threadInput) threadInput.value = "";
+            if (form) form.action = "";
+        }
+
+        // Close on X, Cancel, or overlay click (acknowledge)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('#close-review-ack-modal') ||
+                e.target.closest('#cancel-review-ack-modal')) {
+                closeReviewAckModal();
+                return;
+            }
+            var modal = document.getElementById('review-ack-modal');
+            if (modal && e.target === modal) {
+                closeReviewAckModal();
+            }
+        });
+
+        // --- Review Flag modal wiring (Phase 10E Step 4) ---
+
+        // Open modal
+        document.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.btn-review-flag');
+            if (!trigger) return;
+
+            var modal = document.getElementById('review-flag-modal');
+            var form = document.getElementById('review-flag-form');
+            var body = document.getElementById('review-flag-body');
+            var threadInput = document.getElementById('review-flag-thread-id');
+            if (!modal || !form || !body || !threadInput) return;
+
+            var threadId = trigger.getAttribute('data-thread-id');
+
+            body.value = "";
+            threadInput.value = threadId;
+            form.action = "/thread/" + threadId + "/review/flag";
+
+            modal.style.display = "flex";
+        });
+
+        // Close modal helper
+        function closeReviewFlagModal() {
+            var modal = document.getElementById('review-flag-modal');
+            var form = document.getElementById('review-flag-form');
+            var body = document.getElementById('review-flag-body');
+            var threadInput = document.getElementById('review-flag-thread-id');
+            if (!modal) return;
+            modal.style.display = "none";
+            if (body) body.value = "";
+            if (threadInput) threadInput.value = "";
+            if (form) form.action = "";
+        }
+
+        // Close on X, Cancel, or overlay click (flag)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('#close-review-flag-modal') ||
+                e.target.closest('#cancel-review-flag-modal')) {
+                closeReviewFlagModal();
+                return;
+            }
+            var modal = document.getElementById('review-flag-modal');
+            if (modal && e.target === modal) {
+                closeReviewFlagModal();
+            }
+        });
+    })();
+    </script>
     </div>
 
     {% elif lease_data and not edit_mode %}
@@ -5802,6 +6463,103 @@ document.addEventListener("DOMContentLoaded", function () {
     updateVisibility();
 });
 </script>
+
+<!-- Reminder modal (Phase 10D) -->
+<div id="reminder-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3>Send Payment Reminder</h3>
+            <button type="button" id="close-reminder-modal" class="modal-close-btn">&times;</button>
+        </div>
+
+        <p id="reminder-modal-warning" style="display: none; font-size: 13px; color: #b45309; margin: 0 0 12px 0;"></p>
+
+        <form id="reminder-modal-form" method="POST" action="">
+            <input type="hidden" name="thread_id" id="reminder-thread-id" value="">
+
+            <div class="modal-body">
+                <textarea id="reminder-body"
+                          name="body"
+                          rows="8"
+                          class="modal-textarea"
+                          placeholder="Your reminder message will appear here..."></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" id="cancel-reminder-modal" class="btn-secondary">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary">
+                    Send Reminder
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Acknowledge modal (Phase 10E) -->
+<div id="review-ack-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3>Acknowledge Payment</h3>
+            <button type="button" id="close-review-ack-modal" class="modal-close-btn">&times;</button>
+        </div>
+        <p style="font-size: 13px; color: #6b7280; margin: 0 0 12px 0;">
+            You are confirming that you have reviewed and accepted this payment submission.
+            The tenant will be notified and this thread will be marked as resolved.
+        </p>
+        <form id="review-ack-form" method="POST" action="">
+            <input type="hidden" name="thread_id" id="review-ack-thread-id" value="">
+            <div class="modal-body">
+                <textarea id="review-ack-body"
+                          name="body"
+                          rows="6"
+                          class="modal-textarea"
+                          placeholder="Your acknowledgement message..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-review-ack-modal" class="btn-secondary">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary">
+                    Confirm &amp; Acknowledge
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Flag modal (Phase 10E) -->
+<div id="review-flag-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3>Request Clarification</h3>
+            <button type="button" id="close-review-flag-modal" class="modal-close-btn">&times;</button>
+        </div>
+        <p style="font-size: 13px; color: #6b7280; margin: 0 0 12px 0;">
+            You are requesting clarification from the tenant regarding this payment submission.
+            The tenant will be notified and asked to respond.
+        </p>
+        <form id="review-flag-form" method="POST" action="">
+            <input type="hidden" name="thread_id" id="review-flag-thread-id" value="">
+            <div class="modal-body">
+                <textarea id="review-flag-body"
+                          name="body"
+                          rows="6"
+                          class="modal-textarea"
+                          placeholder="Describe what clarification you need..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-review-flag-modal" class="btn-secondary">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary">
+                    Send to Tenant
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 </body>
 </html>

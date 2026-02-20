@@ -14,10 +14,11 @@ For active implementation work, see ACTIVE_BUILD.md.
 BRANDING NOTE
 ----------------------------------------------------------------
 
-The user-facing product name is Mapmylease (previously Easemylease).
+The user-facing product name is MapMyLease (previously Easemylease).
+The page header and <title> now display "MapMyLease".
 Internal references, file names, and repository name may still use
-older terminology. Treat "Mapmylease" as authoritative for any
-new user-facing text. No branding overhaul has been performed.
+older terminology. Treat "MapMyLease" as authoritative for any
+new user-facing text.
 
 ----------------------------------------------------------------
 PRODUCT DEFINITION
@@ -587,15 +588,31 @@ UX PRINCIPLES
 ----------------------------------------------------------------
 
 Dashboard cards are calm summaries:
-- Show: nickname, earliest start date, tenant name + continuity
-  duration, days until/past expiry, monthly rent, View Lease button
+- Show: nickname, tenant name + continuity duration, days until/past
+  expiry, monthly rent, View Lease button
 - No urgency colour accents on cards
 - No delete buttons on cards
+- No "Needs Attention" button on dashboard cards (removed 2026-02-20;
+  lease detail view button preserved)
 - Expiry is informational (days + date), not alarming
-- Lifecycle ribbons: TERMINATED or EXPIRED (amber, full-width)
-  appear only when the CURRENT version qualifies
+- Lifecycle stamps: diagonal EXPIRED or TERMINATED overlays
+  (bold red border, no background, vertically positioned to avoid
+  overlapping primary CTAs) replace the old full-width amber ribbons
+- Lifecycle priority remains TERMINATED > EXPIRED > ACTIVE; only the
+  highest applicable state renders a stamp.
+- Nickname has light grey background fill (#f3f4f6); no special
+  colour for expired/terminated (stamp is sole lifecycle indicator)
 - Primary "Add Renewal Lease" button appears when _can_renew is True
-- Lifecycle priority: TERMINATED > EXPIRED > ACTIVE
+
+Dashboard layout:
+- Two-column grid: 1.6fr (leases) / 0.9fr (Action Console), gap 32px
+- Lease cards in 2-column grid within lease column (max-width 520px)
+- Responsive: single column below 900px (cards), 1024px (dashboard)
+- Server-side landlord filter: dropdown next to "Your Leases" header,
+  filters both lease cards and Action Console items, only shown when
+  >1 landlord exists, defaults to "All Landlords", URL ?landlord=<name>
+- Landlord group headers: 16px/600/#111827 with inline count "(2)"
+- Upload New Lease button: subtle outline style in header row
 
 Monthly summaries default to collapsed:
 - Both landlord and tenant see last 6 months by default
@@ -674,8 +691,12 @@ Local development on macOS (Terminal + Python venv)
   DASHBOARD ATTENTION BADGES
  ----------------------------------------------------------------
 
-  Dashboard cards show a 🙋🏻 badge with a count when the landlord's
-  attention is needed. The badge is a calm human nudge, not an alert.
+  Attention badges on dashboard lease cards have been removed
+  (2026-02-20). The Action Console is now the sole surface for
+  attention items on the dashboard.
+
+  The lease detail view retains its "Needs attention" button
+  in the header (right-aligned, same row as "Lease Details").
 
   Attention badge counts:
     Threads where status == "open" AND needs_landlord_attention == true
@@ -1047,24 +1068,31 @@ Purpose:
 Desktop Layout (>=1024px):
   Two-column layout.
 
-  LEFT COLUMN:
-  - Lease cards grid (existing grouped-by-lessor layout)
+  LEFT COLUMN (1.6fr):
+  - Lease cards in 2-column grid (max-width 520px per card)
+  - Grouped by landlord with section headers showing count
+  - Server-side landlord filter dropdown (when >1 landlord)
   - Each card:
-      - Lifecycle banner (Expired, Terminated) — unchanged
-      - Subtle urgency indicator:
-          Amber = has open attention items
-          Green = zero open attention items
-      - Entire card click filters Action Console to that lease
+      - Diagonal lifecycle stamp (EXPIRED/TERMINATED) — red border,
+        no background, vertically positioned to avoid overlapping CTAs
+      - Nickname with light grey background fill
+      - Entire card click filters the Action Console to that lease
+        (within the currently selected landlord scope)
       - Explicit "View Lease" link navigates to detail page
 
-  RIGHT COLUMN:
+  RIGHT COLUMN (0.9fr):
   - Persistent Global Action Console panel
   - Sticky positioning (stays in viewport during scroll)
   - Internally scrollable
   - Shows ALL attention items across all leases by default
+    (filtered when landlord dropdown is active)
   - Grouped by lease
   - Sorted by urgency (highest first)
-  - Read-only in initial implementation (no action buttons)
+  - Left accent bars: amber (missing_payment), blue (payment_review)
+  - Action buttons in collapsed item row:
+      missing_payment: Send Reminder (opens modal, 24h cooldown)
+      payment_review: Acknowledge + Flag (each opens modal)
+  - Expanded panel: thread history + secondary details only
 
   Global Alerts box:
   Removed from dashboard template (replaced by console).
@@ -1152,13 +1180,39 @@ backend helper function. The data shape is:
         "items": [
           {
             "thread_id": str,
-            "topic_type": str,
+            "topic_type": str,          // "missing_payment" | "payment_review"
+            "topic_ref": str,           // month key e.g. "2026-02"
             "display_label": str,
             "reason": str,
             "urgency_level": str,
+            "status": str,              // "open" | "resolved"
+            "waiting_on": str,          // "tenant" | "landlord"
+            "open_month": str or null,  // same as topic_ref for display
             "expected_amount": int or null,
             "expected_due_date": str or null,
-            "auto_reminders_suppressed": bool or null
+            "auto_reminders_suppressed": bool or null,
+            "escalation_started_at": str or null,
+            "last_reminder_at": str or null,
+            "overdue_days": int or null,     // escalated missing_payment only
+            "status_display": str,           // pre-computed for template
+            "status_css": str,               // pre-computed CSS class
+            "last_action": {                 // null if no messages
+              "actor": str,
+              "message_type": str,
+              "timestamp": str,
+              "summary_text": str
+            } or null,
+            "recent_messages": [             // last 1-3, oldest first
+              {
+                "id": str,
+                "actor": str,
+                "message_type": str,
+                "body": str or null,
+                "created_at": str,
+                "attachments": list or null,
+                "payment_id": str or null
+              }
+            ]
           }
         ]
       }
@@ -1171,9 +1225,28 @@ Urgency levels (simple string, not numeric):
   "medium" — payment_review, tenant has replied
   "normal" — payment_review, awaiting initial review
 
+Pre-computed display fields (templates must not derive these):
+  status_display — human-readable status string
+  status_css     — CSS class for styling
+  overdue_days   — only present when escalation_started_at is set
+                   (gated by escalation state, not numeric truthiness)
+  last_action    — summary of most recent message in thread
+
 This function aggregates already-computed thread states.
 It does NOT implement escalation or reminder logic.
 All state derives from threads.json.
+
+Reminder flow (Phase 10D — operational):
+  Send Reminder opens a modal with prefilled, editable draft
+  text (greeting uses lessee_name, closing uses lessor_name).
+  Landlord edits message and submits. POST /thread/<thread_id>/
+  reminder receives body from form, validates non-empty, passes
+  to add_message_to_thread(). last_reminder_at set automatically
+  (permanently blocks auto-reminders). POST + redirect pattern.
+  add_message_to_thread() unchanged.
+
+  Item dict includes lessee_name and lessor_name (loaded from
+  lease current_values, empty string fallback if missing).
 
 ------------------------------------------------------------
 6. STATE SYNCHRONISATION RULE

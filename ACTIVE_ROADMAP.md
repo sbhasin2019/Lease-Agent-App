@@ -173,7 +173,7 @@ Status: NOT STARTED
 ----------------------------------------------------------------
 
 Action Console — Landlord Dashboard
-Status: IN PROGRESS (Phase 10)
+Status: PHASE 10F + VISUAL REFINEMENTS COMPLETE
 
   Intent: Replace the modal-driven attention model with a
   persistent Action Console panel on the landlord dashboard.
@@ -182,9 +182,20 @@ Status: IN PROGRESS (Phase 10)
   - Left: lease cards grid (existing, with colour indicators)
   - Right: persistent Action Console (all attention items)
 
-  Current step: layout + read-only console rendering.
-  Action buttons (reminders, suppression, review) are deferred
-  to Phase 10C.
+  Phase 10A: COMPLETE — topic_type + missing_payment info in modal
+  Phase 10B: COMPLETE — two-column layout, read-only console
+  Phase 10C: COMPLETE — inline expansion + automated reminder
+  Phase 10D: COMPLETE — landlord-authored reminder modal
+  Phase 10E: COMPLETE — payment review actions (acknowledge + flag)
+    Acknowledge resolves thread. Flag requests tenant clarification.
+    Both use modal-based flows with editable messages. Action
+    buttons moved to collapsed item row for immediate visibility.
+  Phase 10F: COMPLETE — reminder safeguards (24h cooldown,
+    follow-up detection, follow-up wording)
+  Dashboard Visual Refinements: COMPLETE — layout rebalance,
+    landlord filter, lease card typography, state stamps,
+    console accent bars
+  Phase 10G: NOT STARTED — tenant page alignment
 
   See PROJECT_CONTEXT.md → UI ARCHITECTURE — CONTROL CENTRE
   MODEL for the full architectural specification.

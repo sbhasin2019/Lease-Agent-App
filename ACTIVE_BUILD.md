@@ -820,7 +820,7 @@ Phase 10 — Action Console Architecture               [IN PROGRESS]
     - Exposed missing_payment thread info (expected_amount,
       expected_due_date, suppression status) in attention modal
 
-    Phase 10B — Dashboard Action Console:
+    Phase 10B — Dashboard Action Console (COMPLETE):
     - New helper: get_global_attention_summary(thread_data, leases)
       Aggregates all attention items, groups by lease, sorts by
       urgency. Returns structured data for console rendering.
@@ -832,25 +832,181 @@ Phase 10 — Action Console Architecture               [IN PROGRESS]
         Amber = has open attention items
         Green = zero open attention items
     - Card click filters console to that lease
-    - "Show All" resets filter
+    - Click outside lease cards and console resets to global view
     - Console is read-only (no action buttons yet)
     - Global alerts box removed (replaced by console)
     - Responsive: stacks vertically below 1024px
 
-    Phase 10C — Action Buttons (FUTURE, not this step):
-    - Send Reminder button per missing_payment thread
-    - Stop Reminders button per thread
-    - Payment review actions in console
+    Phase 10C — Action Console Inline Operational Mode (COMPLETE):
 
-    Phase 10D — Tenant Page (FUTURE, not this step):
+      Step 1: Backend enrichment (COMPLETE)
+        - get_attention_summary_for_lease() extended with:
+            last_action (summary of most recent message)
+            recent_messages (last 1-3 messages, oldest first)
+            overdue_days (escalated missing_payment only,
+              gated by escalation_started_at)
+            status_display (pre-computed human-readable status)
+            status_css (pre-computed CSS class)
+            Plus thread state fields: open_month, topic_ref,
+            escalation_started_at, last_reminder_at
+        - add_message_to_thread() extended: sets last_reminder_at
+          when message_type == "reminder" and topic_type ==
+          "missing_payment". Permanently blocks auto-reminders.
+        - New fields pass through get_global_attention_summary()
+          automatically via dict spread (no changes needed).
+
+      Step 2: Inline expansion — read-only (COMPLETE)
+        - Console items expand inline (one-at-a-time accordion)
+        - Expanded panel shows: status, due date, expected amount,
+          escalation date, suppression status, recent activity
+        - Chevron indicator (▸ / rotates on expand)
+        - Lease card click filters console to that lease
+        - Click outside resets to global view
+        - Event-delegated JS in IIFE (no inline handlers)
+        - Templates render pre-computed fields only (no
+          business logic in Jinja)
+
+      Step 3: Inline reminder — missing_payment only (COMPLETE)
+        - POST /thread/<thread_id>/reminder route
+        - Validates: thread exists, topic_type == missing_payment,
+          status == open
+        - Calls add_message_to_thread() with message_type="reminder"
+          and system-generated body ("Payment reminder sent.")
+        - last_reminder_at set automatically (blocks auto-reminders)
+        - Redirects to dashboard (POST + redirect pattern)
+        - Send Reminder button in .console-panel-actions, gated by
+          topic_type == "missing_payment" in template
+        - Communication modal deferred to Phase 10D.
+
+      Originally planned Steps 3-5 (payment_review actions,
+      suppress toggle, full history modal) descoped from 10C.
+      Payment review actions and full history modal will be
+      addressed in future phases as needed.
+
+    Phase 10D — Landlord-Authored Communication Layer (COMPLETE):
+
+      Step 1: Replace POST form with modal trigger (COMPLETE)
+        - Send Reminder button changed from <form> submit to
+          <button> with data attributes (thread-id, lessee-name,
+          lessor-name, open-month)
+        - No POST on click, no JS wiring yet
+
+      Step 2: Add reminder modal HTML structure (COMPLETE)
+        - Hidden modal overlay with form, textarea, hidden input
+        - CSS for modal-overlay, modal-container, modal-header,
+          modal-textarea, modal-footer, btn-primary, btn-secondary
+        - No JS behavior yet
+
+      Step 3: Wire modal open/close + draft injection (COMPLETE)
+        - Lazy DOM lookups (modal HTML is after script in DOM)
+        - Click .btn-open-reminder-modal opens modal
+        - Draft text: "Dear {lessee_name}, ... {open_month} ...
+          Many thanks, {lessor_name}"
+        - Form action set dynamically to /thread/{id}/reminder
+        - Close on: X button, Cancel, overlay click, ESC key
+        - closeReminderModal() clears textarea and form state
+
+      Step 4: Backend accepts landlord-authored body (COMPLETE)
+        - thread_send_reminder() reads request.form["body"]
+        - Strips whitespace, aborts 400 if empty
+        - Passes landlord-authored body to add_message_to_thread()
+        - add_message_to_thread() unchanged
+        - last_reminder_at invariant preserved
+
+      Step 5: Backend enrichment — lease names (COMPLETE)
+        - get_attention_summary_for_lease() loads current lease
+          to get lessee_name and lessor_name from current_values
+        - Names added to each item dict (empty string fallback)
+        - Modal draft text now shows actual tenant/landlord names
+        - Company names render exactly as stored (no parsing)
+
+    Phase 10E — Payment Review Actions (COMPLETE):
+
+      Step 1: Backend routes (COMPLETE)
+        - POST /thread/<thread_id>/review/acknowledge
+          Validates payment_review + open. Calls add_message_to_thread()
+          with message_type="acknowledge". Second load-save sets
+          needs_landlord_attention=False. Thread becomes resolved.
+        - POST /thread/<thread_id>/review/flag
+          Validates payment_review + open. Calls add_message_to_thread()
+          with message_type="flag". Second load-save sets
+          needs_landlord_attention=False. Thread remains open,
+          waiting_on="tenant".
+        - Both validate non-empty body from request.form.
+
+      Step 2: Template buttons (COMPLETE)
+        - Acknowledge button (class="btn-review-ack", green)
+        - Flag button (class="btn-review-flag", red)
+        - Gated by topic_type == "payment_review" in template
+
+      Step 3: Acknowledge modal (COMPLETE)
+        - id="review-ack-modal"
+        - Explanation text + editable textarea
+        - Prefilled draft: "Dear {name}, I confirm that I have
+          reviewed your recent payment submission..."
+        - Form action set dynamically to /review/acknowledge
+        - Close on: X, Cancel, overlay, ESC
+
+      Step 4: Flag modal (COMPLETE)
+        - id="review-flag-modal"
+        - Explanation text + empty textarea (no prefill)
+        - Title: "Request Clarification"
+        - Form action set dynamically to /review/flag
+        - Close on: X, Cancel, overlay, ESC
+
+      UX improvement: Buttons moved to collapsed item row (COMPLETE)
+        - Primary action buttons (Send Reminder, Acknowledge, Flag)
+          now render in .console-item-actions within the collapsed
+          row, visible without expanding the panel.
+        - Expanded panel contains only thread history, secondary
+          details, and View Full History button.
+        - JS toggle guard: clicks on .console-item-actions skip
+          the panel toggle handler.
+
+    Phase 10F — Reminder Safeguards (COMPLETE):
+      - 24h backend cooldown in thread_send_reminder()
+        Uses datetime.utcnow() for UTC consistency.
+      - Frontend follow-up detection: modal JS reads
+        data-last-reminder-at, blocks if <1 day, warns if 1-5 days
+        with follow-up wording, standard draft if >5 days
+      - data-last-reminder-at attribute on Send Reminder button
+
+    Dashboard Visual Refinements (COMPLETE):
+      - Column ratio: 1fr 1fr → 1.6fr 0.9fr (lease-dominant)
+      - Lease cards: 2-column grid, max-width 520px, 900px fallback
+      - Server-side landlord filter (dropdown, filters cards + console)
+      - Landlord section headers: 16px/600/#111827, count "(2)", border
+      - Removed "Needs Attention" button from dashboard cards
+      - Removed "Lease started on" subtitle from cards
+      - Removed dashboard compact card overrides (scale 0.8, 13px, etc.)
+      - Typography rebalanced: title 18px/700, rent 14px/600,
+        expiry 12px/700, tenant 11px, padding 12px, gap 5px
+      - Upload button restyled (outline), header restructured
+      - Console: accent bars, urgency dots removed, visual hierarchy
+      - Lease state stamps: diagonal EXPIRED/TERMINATED overlays
+        (23px/900, 3px red border, no background, vertically positioned
+        to avoid overlapping primary CTAs)
+      - Old lifecycle ribbons replaced by stamp overlays
+      - Nickname background fill: grey default, no color for
+        expired/terminated (stamp is sole lifecycle indicator)
+      - Header upgraded: "MapMyLease" branding with premium banner
+        (border-bottom, 3px top accent bar, 24px/700 title)
+      - Subtitle: "We help you track your lease."
+
+    Phase 10G — Tenant Page (FUTURE, not this step):
     - Overdue rent notice with reminder messages
     - Tenant Action Console (mirrors landlord model)
 
     WHAT CHANGES:
-    - app.py: new get_global_attention_summary() helper,
-      dashboard route enrichment
+    - app.py: get_global_attention_summary() helper,
+      get_attention_summary_for_lease() enrichment,
+      add_message_to_thread() last_reminder_at extension,
+      dashboard route enrichment, thread_review_acknowledge(),
+      thread_review_flag(), thread_send_reminder()
     - templates/index.html: two-column layout, Action Console
-      panel, lease card colour indicators, responsive CSS
+      panel with inline expansion + action buttons in collapsed
+      row, three modals (reminder, acknowledge, flag), lease card
+      colour indicators, responsive CSS, event-delegated JS
 
     WHAT DOES NOT CHANGE:
     - Engine evaluation logic (Phases 6-9)

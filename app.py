@@ -10,7 +10,7 @@ import re
 import calendar
 import uuid
 import secrets
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, abort
 from werkzeug.utils import secure_filename
 
 # Text extraction imports
@@ -721,6 +721,10 @@ def count_landlord_attention_threads(lease_group_id, thread_data=None):
 def get_attention_summary_for_lease(lease_group_id, thread_data=None):
     """List open threads needing landlord attention with display info.
 
+    Enriched for Action Console inline expansion. Each item includes
+    thread state fields, last_action summary, recent_messages (1-3),
+    and overdue_days (escalated missing_payment only).
+
     Args:
         lease_group_id: str
         thread_data: optional preloaded dict from _load_all_threads()
@@ -728,9 +732,21 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
     Returns:
         list of dicts, newest first. Each dict:
             thread_id:     str
+            topic_type:    str
+            topic_ref:     str | None
+            status:        str
+            waiting_on:    str | None
             display_label: str (e.g. "Rent — January 2026")
             reason:        str (human-readable)
             open_month:    str (YYYY-MM for View link, or None)
+            escalation_started_at:    str | None
+            last_reminder_at:         str | None
+            auto_reminders_suppressed: bool
+            expected_amount:          number | None (missing_payment only)
+            expected_due_date:        str | None (missing_payment only)
+            overdue_days:             int | None (escalated missing_payment only)
+            last_action:              dict | None
+            recent_messages:          list (last 1-3, oldest first)
     """
     month_names = ["January", "February", "March", "April", "May", "June",
                    "July", "August", "September", "October", "November",
@@ -743,10 +759,34 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
         "general": "General",
     }
 
+    # Human-readable summary for each message_type
+    _ACTION_SUMMARIES = {
+        "submission": "Payment submitted",
+        "flag": "Flag raised",
+        "reply": None,  # depends on actor
+        "reminder": "Reminder sent",
+        "auto_reminder": "Auto reminder sent",
+        "acknowledge": "Acknowledged",
+        "nudge": "Follow-up nudge",
+    }
+
     threads = get_threads_for_lease_group(lease_group_id, thread_data)
     attention = [t for t in threads
                  if t.get("status") == "open"
                  and t.get("needs_landlord_attention") is True]
+
+    # Look up lease names for modal draft text
+    lessee_name = ""
+    lessor_name = ""
+    all_leases = _load_all_leases().get("leases", [])
+    for l in all_leases:
+        if l.get("lease_group_id") == lease_group_id and l.get("is_current"):
+            cv = l.get("current_values", l)
+            lessee_name = cv.get("lessee_name") or ""
+            lessor_name = cv.get("lessor_name") or ""
+            break
+
+    today = datetime.utcnow().date()
 
     items = []
     for t in attention:
@@ -776,9 +816,8 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
                 open_month = period
 
         # Determine reason from thread context
+        msgs = get_messages_for_thread(t["id"], thread_data)
         if topic_type == "payment_review":
-            # Check if tenant replied (waiting_on=landlord after tenant message)
-            msgs = get_messages_for_thread(t["id"], thread_data)
             last_msg = msgs[-1] if msgs else None
             if last_msg and last_msg.get("actor") == "tenant":
                 reason = "Tenant replied"
@@ -791,18 +830,89 @@ def get_attention_summary_for_lease(lease_group_id, thread_data=None):
         else:
             reason = "Needs your attention"
 
+        # --- last_action: summary of the most recent message ---
+        last_action = None
+        if msgs:
+            last_msg = msgs[-1]
+            mt = last_msg.get("message_type", "")
+            actor = last_msg.get("actor", "")
+            summary = _ACTION_SUMMARIES.get(mt)
+            if summary is None:
+                # reply — depends on actor
+                if actor == "tenant":
+                    summary = "Tenant replied"
+                elif actor == "landlord":
+                    summary = "You replied"
+                else:
+                    summary = "System message"
+            last_action = {
+                "actor": actor,
+                "message_type": mt,
+                "timestamp": last_msg.get("created_at"),
+                "summary_text": summary,
+            }
+
+        # --- recent_messages: last 1-3, oldest first for display ---
+        _msg_fields = ("id", "actor", "message_type", "body",
+                       "created_at", "attachments", "payment_id")
+        recent_messages = [
+            {k: m.get(k) for k in _msg_fields}
+            for m in msgs[-3:]
+        ]
+
+        # --- overdue_days: escalated missing_payment only ---
+        overdue_days = None
+        if (
+            topic_type == "missing_payment"
+            and t.get("escalation_started_at")
+        ):
+            due_str = t.get("expected_due_date")
+            if due_str:
+                try:
+                    due_date = datetime.strptime(due_str, "%Y-%m-%d").date()
+                    diff = (today - due_date).days
+                    overdue_days = diff if diff > 0 else None
+                except ValueError:
+                    pass
+
+        # --- status_display + status_css: pre-computed for template ---
+        status_display = ""
+        status_css = ""
+        if topic_type == "missing_payment":
+            if t.get("escalation_started_at"):
+                day_word = "day" if overdue_days == 1 else "days"
+                status_display = f"Overdue by {overdue_days} {day_word}"
+            else:
+                status_display = "Expected payment not yet submitted"
+        elif topic_type == "payment_review":
+            status_css = "status-normal"
+            if t.get("waiting_on") == "landlord":
+                status_display = "Awaiting your review"
+            else:
+                status_display = "Awaiting tenant response"
+
         item = {
             "thread_id": t["id"],
             "topic_type": topic_type,
+            "topic_ref": topic_ref,
+            "status": t.get("status"),
+            "waiting_on": t.get("waiting_on"),
             "display_label": display_label,
             "reason": reason,
             "open_month": open_month,
+            "escalation_started_at": t.get("escalation_started_at"),
+            "last_reminder_at": t.get("last_reminder_at"),
+            "auto_reminders_suppressed": t.get("auto_reminders_suppressed", False),
+            "expected_amount": t.get("expected_amount") if topic_type == "missing_payment" else None,
+            "expected_due_date": t.get("expected_due_date") if topic_type == "missing_payment" else None,
+            "overdue_days": overdue_days,
+            "status_display": status_display,
+            "status_css": status_css,
+            "last_action": last_action,
+            "recent_messages": recent_messages,
+            "lessee_name": lessee_name,
+            "lessor_name": lessor_name,
         }
-        # For missing_payment threads, include extra fields for UI display
-        if topic_type == "missing_payment":
-            item["expected_amount"] = t.get("expected_amount")
-            item["expected_due_date"] = t.get("expected_due_date")
-            item["auto_reminders_suppressed"] = t.get("auto_reminders_suppressed", False)
         items.append(item)
 
     # Sort newest first by open_month (threads without open_month go last)
@@ -1074,6 +1184,11 @@ def add_message_to_thread(thread_id, actor, message_type, body,
         thread["waiting_on"] = None
         thread["resolved_at"] = datetime.now().isoformat()
     # reminder, auto_reminder, nudge → no change to waiting_on
+
+    # Manual landlord reminder on missing_payment: update last_reminder_at
+    # to permanently block automatic reminders (gated by last_reminder_at is None).
+    if message_type == "reminder" and thread.get("topic_type") == "missing_payment":
+        thread["last_reminder_at"] = datetime.now().isoformat()
 
     # Sync needs_landlord_attention for payment_review threads only.
     # missing_payment threads manage this via the escalation pipeline.
@@ -3157,12 +3272,36 @@ def index():
             lease["_can_renew"] = is_terminated or is_expired
 
         grouped_leases = group_leases_by_lessor(leases)
+
+        # Landlord filter — applied after grouping
+        all_lessor_names = list(grouped_leases.keys())
+        selected_landlord = request.args.get("landlord", "all")
+        if selected_landlord != "all" and selected_landlord in grouped_leases:
+            grouped_leases = {
+                k: v for k, v in grouped_leases.items()
+                if k == selected_landlord
+            }
+            # Filter leases for console to match
+            filtered_lease_ids = {
+                l.get("lease_group_id", l.get("id"))
+                for v in grouped_leases.values() for l in v
+            }
+            console_leases = [
+                l for l in leases
+                if l.get("lease_group_id", l.get("id")) in filtered_lease_ids
+            ]
+        else:
+            selected_landlord = "all"
+            console_leases = leases
+
         global_alerts = get_global_alerts(leases)
-        console_data = get_global_attention_summary(leases)
+        console_data = get_global_attention_summary(console_leases)
         return render_template("index.html",
                                uploads=uploads,
                                leases=leases,
                                grouped_leases=grouped_leases,
+                               all_lessor_names=all_lessor_names,
+                               selected_landlord=selected_landlord,
                                global_alerts=global_alerts,
                                console_data=console_data,
                                lease_data=None,
@@ -4274,6 +4413,131 @@ def revoke_token_route(lease_group_id):
         else:
             flash("Failed to revoke tenant link.", "error")
     return redirect(url_for("index", lease_id=redirect_lease_id or ""))
+
+
+@app.route("/thread/<thread_id>/reminder", methods=["POST"])
+def thread_send_reminder(thread_id):
+    """Landlord action: send a payment reminder for a missing_payment thread.
+
+    Validates thread exists, is missing_payment, and is open.
+    Calls add_message_to_thread() which handles last_reminder_at.
+    Redirects to dashboard.
+    """
+    thread_data = _load_all_threads()
+    thread = next((t for t in thread_data["threads"]
+                   if t["id"] == thread_id), None)
+
+    if not thread:
+        abort(404)
+    if thread.get("topic_type") != "missing_payment":
+        abort(404)
+    if thread.get("status") != "open":
+        abort(404)
+
+    # 24-hour cooldown: block if reminder sent within last 24h.
+    last_reminder = thread.get("last_reminder_at")
+    if last_reminder:
+        try:
+            last_dt = datetime.fromisoformat(last_reminder)
+            if (datetime.utcnow() - last_dt).total_seconds() < 86400:
+                abort(400)
+        except (ValueError, TypeError):
+            pass
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        abort(400)
+
+    add_message_to_thread(
+        thread_id=thread_id,
+        actor="landlord",
+        message_type="reminder",
+        body=body,
+    )
+
+    return redirect(url_for("index"))
+
+
+@app.route("/thread/<thread_id>/review/acknowledge", methods=["POST"])
+def thread_review_acknowledge(thread_id):
+    """Landlord action: acknowledge a payment_review thread.
+
+    Marks thread as resolved via add_message_to_thread(acknowledge).
+    Sets needs_landlord_attention=False in a second save pass.
+    Redirects to dashboard.
+    """
+    thread_data = _load_all_threads()
+    thread = next((t for t in thread_data["threads"]
+                   if t["id"] == thread_id), None)
+
+    if not thread:
+        abort(404)
+    if thread.get("topic_type") != "payment_review":
+        abort(404)
+    if thread.get("status") != "open":
+        abort(404)
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        abort(400)
+
+    add_message_to_thread(
+        thread_id=thread_id,
+        actor="landlord",
+        message_type="acknowledge",
+        body=body,
+    )
+
+    # Explicit needs_landlord_attention clear (second load-save).
+    thread_data = _load_all_threads()
+    thread = next((t for t in thread_data["threads"]
+                   if t["id"] == thread_id), None)
+    if thread:
+        thread["needs_landlord_attention"] = False
+        _save_threads_file(thread_data)
+
+    return redirect(url_for("index"))
+
+
+@app.route("/thread/<thread_id>/review/flag", methods=["POST"])
+def thread_review_flag(thread_id):
+    """Landlord action: flag a payment_review thread for tenant clarification.
+
+    Sets waiting_on=tenant via add_message_to_thread(flag).
+    Sets needs_landlord_attention=False in a second save pass.
+    Thread remains open. Redirects to dashboard.
+    """
+    thread_data = _load_all_threads()
+    thread = next((t for t in thread_data["threads"]
+                   if t["id"] == thread_id), None)
+
+    if not thread:
+        abort(404)
+    if thread.get("topic_type") != "payment_review":
+        abort(404)
+    if thread.get("status") != "open":
+        abort(404)
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        abort(400)
+
+    add_message_to_thread(
+        thread_id=thread_id,
+        actor="landlord",
+        message_type="flag",
+        body=body,
+    )
+
+    # Explicit needs_landlord_attention clear (second load-save).
+    thread_data = _load_all_threads()
+    thread = next((t for t in thread_data["threads"]
+                   if t["id"] == thread_id), None)
+    if thread:
+        thread["needs_landlord_attention"] = False
+        _save_threads_file(thread_data)
+
+    return redirect(url_for("index"))
 
 
 @app.route("/lease/<lease_group_id>/payment/<payment_id>/review", methods=["POST"])
