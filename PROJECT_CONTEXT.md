@@ -643,6 +643,95 @@ AI autofill:
 - Lease nickname AI format: "City - Condo/Locality Name -
   Apartment/House Number" (e.g. "Gurgaon - World Spa - A5-102")
 
+AI PREVIEW ARCHITECTURE — 2026-02-21 CLARIFICATION
+
+1. normalizeAiFields() — Canonical Normalization Layer
+
+  All AI extraction consumers must pass through
+  normalizeAiFields(raw).
+
+  This function is the canonical AI → form key mapping boundary.
+
+  It:
+  - Normalizes AI response keys to form field names
+  - Applies three explicit remaps:
+      start_date → lease_start_date
+      end_date → lease_end_date
+      lock_in_duration_months → lock_in_months
+  - Leaves identity keys untouched
+
+  Used by:
+  - Live AI Preview (aiPrefill response handler)
+  - Saved AI Preview (read-only audit modal)
+
+  No other code should perform ad-hoc key mapping.
+
+2. Saved AI Preview — Read-Only Audit Layer
+
+  Introduced 2026-02-21.
+
+  Purpose:
+  Render persisted lease.ai_extraction snapshot
+  against current form values.
+
+  Important guarantees:
+  - Edit mode only
+  - Does NOT re-run AI
+  - Does NOT mutate form fields
+  - Does NOT persist data
+  - Reads SAVED_AI_EXTRACTION injected via Jinja
+  - Uses normalizeAiFields() for mapping
+
+  This is the first read-path consumer
+  of stored ai_extraction data.
+
+3. ai_extraction Lifecycle
+
+  Current system behaviour:
+
+  Backend:
+  - /ai_prefill overwrites lease.ai_extraction
+  - No extraction history maintained
+
+  Frontend:
+  - AI button disables after Apply
+  - Guard resets on page reload
+
+  ai_extraction is a single snapshot model,
+  not a versioned extraction log.
+
+4. pendingSuggestions Lifecycle
+
+  pendingSuggestions persists in memory until:
+  - Apply is clicked
+  OR
+  - A new AI run resets it
+
+  Canceling the preview modal does not clear it.
+
+  This has no persistence impact unless Apply is executed.
+
+5. Trust Boundary — innerHTML Injection
+
+  AI field values and evidence text are rendered
+  via innerHTML in both live and saved preview modals.
+
+  No HTML sanitization layer is currently applied.
+
+  System assumes trusted AI output (Claude API).
+
+  This is an explicit trust boundary
+  and must be documented as such.
+
+6. UX Scope Decision — Edit Mode Only
+
+  The "View AI Preview" button is intentionally scoped
+  to edit mode.
+
+  It does not appear in read-only lease view.
+
+  This was a deliberate UX boundary decision.
+
 Attention in lease detail view:
 - "Needs attention" button appears in the lease detail header
   (right-aligned, same row as "Lease Details" heading)

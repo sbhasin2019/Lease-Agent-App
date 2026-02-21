@@ -1024,6 +1024,18 @@ Phase 10 — Action Console Architecture               [IN PROGRESS]
     See PROJECT_CONTEXT.md → UI ARCHITECTURE — CONTROL CENTRE
     MODEL for the authoritative architectural specification.
 
+    Phase 10H — Hardening (2026-02-21)
+
+    Supporting technical-debt passes executed in parallel with
+    Phase 10 build:
+
+    - PASS 5B — z-index standardisation (.modal-overlay 9999 → 1000)
+    - PASS 5C — Urgency selector consolidation (duplicate CSS merged)
+    - PASS 5D — Modal pattern audit (13 modals catalogued; refactor deferred)
+
+    No functional rent-engine logic was modified.
+    No behavioural changes introduced.
+
 ================================================================
 KEY DECISIONS LOG
 ================================================================

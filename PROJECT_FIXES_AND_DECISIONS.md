@@ -1073,5 +1073,193 @@ For planned future work, see ACTIVE_ROADMAP.md.
     without dominating the card.
 
 ----------------------------------------------------------------
+
+2026-02-21 — Phase 10H Hardening & AI Preview Architecture Elevation
+
+  This session focused on structural hardening, technical debt
+  consolidation, and formalising the AI preview subsystem as a
+  first-class architectural component. No backend AI logic was
+  modified.
+
+  1. z-index Standardisation (PASS 5B)
+
+    Problem:
+    .modal-overlay used z-index: 9999 while all other modals
+    used 1000. No documented stacking scale existed.
+
+    Decision:
+    Normalised .modal-overlay from 9999 → 1000.
+    Introduced a documented four-tier z-index scale at the top
+    of the stylesheet:
+
+        1   — internal stacking
+        5   — decorative overlays (stamps)
+        900 — loading overlay
+        1000 — modals
+
+    Result:
+    Consistent modal layering.
+    Reduced future stacking risk.
+    No visual changes.
+
+  ------------------------------------------------------------
+
+  2. Urgency Selector Consolidation (PASS 5C)
+
+    Problem:
+    Each urgency level (.urgency-warning, .urgency-urgent,
+    .urgency-critical) was defined in two separate CSS blocks
+    with duplicated properties.
+
+    Decision:
+    Merged three duplicate selector pairs into single
+    consolidated blocks. No property values changed.
+
+    Result:
+    Reduced duplication.
+    Lower regression surface.
+    No visual changes.
+
+  ------------------------------------------------------------
+
+  3. Modal Pattern Audit (PASS 5D)
+
+    Action:
+    Catalogued 13 modals across the system.
+    Identified 6 inconsistencies across two modal patterns:
+        Pattern A — CSS class toggle (.visible)
+        Pattern B — Inline style toggle (style.display)
+
+    A unification refactor was initiated but halted by user
+    decision. No structural modal changes were applied.
+
+    This entry records the audit as completed, but the refactor
+    intentionally deferred.
+
+  ------------------------------------------------------------
+
+  4. normalizeAiFields() — Canonical AI Normalization Layer
+
+    Problem:
+    AI response keys did not fully align with form field names.
+    Mapping logic was duplicated and brittle.
+
+    Decision:
+    Extracted mapping into normalizeAiFields(raw) as a pure
+    helper. This function now serves as the canonical AI → form
+    normalization layer.
+
+    Used by:
+        - Live AI Preview (aiPrefill handler)
+        - Saved AI Preview (read-only audit view)
+
+    Key remaps formalised:
+        start_date → lease_start_date
+        end_date → lease_end_date
+        lock_in_duration_months → lock_in_months
+
+    Result:
+    Single source of truth for AI field normalization.
+    Reduced duplication.
+    Elevated mapping layer to architectural boundary.
+
+  ------------------------------------------------------------
+
+  5. Saved AI Preview — First Read-Path Consumer of ai_extraction
+
+    Before this session:
+    lease.ai_extraction was persisted but never read.
+
+    Decision:
+    Introduced "View AI Preview" (edit-mode only).
+    This modal renders the persisted ai_extraction snapshot
+    against current form values in a read-only audit view.
+
+    Important:
+    - Does not re-run AI
+    - Does not mutate form fields
+    - Does not persist data
+    - Uses Jinja-injected SAVED_AI_EXTRACTION constant
+    - Uses normalizeAiFields() for key mapping
+
+    Impact:
+    ai_extraction is no longer write-only.
+    Saved AI Preview is the first read-path consumer
+    of persisted AI extraction data.
+
+  ------------------------------------------------------------
+
+  6. FIELD_LABELS Collision — JS Parse Failure Incident
+
+    During UI refinement, a duplicate declaration:
+
+        var FIELD_LABELS
+
+    shadowed an existing const FIELD_LABELS.
+
+    Impact:
+    JavaScript parse failure halted:
+        - aiPrefill()
+        - openAiPreviewModal()
+        - openSavedAiPreview()
+        - All subsequent JS in that script block
+
+    Resolution:
+    Removed duplicate declaration.
+    Existing const FIELD_LABELS is now the single source of
+    truth.
+
+    This incident underscores the importance of global namespace
+    discipline.
+
+  ------------------------------------------------------------
+
+  7. AI Rerun Guard Clarification
+
+    Current system behaviour:
+
+    Frontend:
+        - Disables AI button after Apply
+        - Resets on page reload
+
+    Backend:
+        - Allows unlimited /ai_prefill calls
+        - Overwrites previous lease.ai_extraction
+        - No history maintained
+
+    This is documented architectural behaviour, not a defect.
+
+  ------------------------------------------------------------
+
+  8. pendingSuggestions Lifecycle
+
+    pendingSuggestions is not cleared when preview modal is
+    Cancelled. It persists in JS memory until the next AI run,
+    which resets it at the start of the aiPrefill handler.
+
+    No persistence impact unless Apply is clicked.
+
+  ------------------------------------------------------------
+
+  9. innerHTML Trust Assumption
+
+    AI field values and evidence text are injected via innerHTML
+    in both live and saved AI preview modals.
+
+    No HTML sanitization layer is currently applied.
+    System assumes trusted AI output (Claude API responses).
+
+    This is an explicit trust boundary.
+
+  ------------------------------------------------------------
+
+  10. UX Scope Decision — Edit Mode Only
+
+    The "View AI Preview" button is intentionally scoped to edit
+    mode. It does not appear in read-only lease view.
+
+    This was a conscious UX boundary decision.
+
+----------------------------------------------------------------
 END OF HISTORICAL LOG
 ----------------------------------------------------------------

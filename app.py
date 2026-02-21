@@ -1230,6 +1230,7 @@ def resolve_thread(thread_id):
     thread["status"] = "resolved"
     thread["waiting_on"] = None
     thread["resolved_at"] = datetime.now().isoformat()
+    thread["needs_landlord_attention"] = False
 
     _save_threads_file(thread_data)
     return thread
@@ -3294,7 +3295,6 @@ def index():
             selected_landlord = "all"
             console_leases = leases
 
-        global_alerts = get_global_alerts(leases)
         console_data = get_global_attention_summary(console_leases)
         return render_template("index.html",
                                uploads=uploads,
@@ -3302,7 +3302,6 @@ def index():
                                grouped_leases=grouped_leases,
                                all_lessor_names=all_lessor_names,
                                selected_landlord=selected_landlord,
-                               global_alerts=global_alerts,
                                console_data=console_data,
                                lease_data=None,
                                edit_mode=False,
@@ -4463,7 +4462,7 @@ def thread_review_acknowledge(thread_id):
     """Landlord action: acknowledge a payment_review thread.
 
     Marks thread as resolved via add_message_to_thread(acknowledge).
-    Sets needs_landlord_attention=False in a second save pass.
+    add_message_to_thread handles needs_landlord_attention sync.
     Redirects to dashboard.
     """
     thread_data = _load_all_threads()
@@ -4488,14 +4487,6 @@ def thread_review_acknowledge(thread_id):
         body=body,
     )
 
-    # Explicit needs_landlord_attention clear (second load-save).
-    thread_data = _load_all_threads()
-    thread = next((t for t in thread_data["threads"]
-                   if t["id"] == thread_id), None)
-    if thread:
-        thread["needs_landlord_attention"] = False
-        _save_threads_file(thread_data)
-
     return redirect(url_for("index"))
 
 
@@ -4504,7 +4495,7 @@ def thread_review_flag(thread_id):
     """Landlord action: flag a payment_review thread for tenant clarification.
 
     Sets waiting_on=tenant via add_message_to_thread(flag).
-    Sets needs_landlord_attention=False in a second save pass.
+    add_message_to_thread handles needs_landlord_attention sync.
     Thread remains open. Redirects to dashboard.
     """
     thread_data = _load_all_threads()
@@ -4528,14 +4519,6 @@ def thread_review_flag(thread_id):
         message_type="flag",
         body=body,
     )
-
-    # Explicit needs_landlord_attention clear (second load-save).
-    thread_data = _load_all_threads()
-    thread = next((t for t in thread_data["threads"]
-                   if t["id"] == thread_id), None)
-    if thread:
-        thread["needs_landlord_attention"] = False
-        _save_threads_file(thread_data)
 
     return redirect(url_for("index"))
 

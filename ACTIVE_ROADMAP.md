@@ -131,9 +131,14 @@ Status: DESIGNED — NOT YET IMPLEMENTED
 ----------------------------------------------------------------
 
 Residual CSS Cleanup
-Status: NOT STARTED
+Status: PARTIALLY COMPLETE (2026-02-21)
 
-  The following CSS exists in index.html but is not applied
+  Phase 10H completed:
+  - z-index standardisation (PASS 5B)
+  - Urgency selector consolidation (PASS 5C)
+  - Modal audit (PASS 5D — refactor deferred)
+
+  The following CSS existed in index.html but was not applied
   to any HTML element:
   - .lease-card.urgency-* classes (left-border colour accents
     from the old dashboard card design)

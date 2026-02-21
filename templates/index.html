@@ -10,6 +10,14 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
     <style>
+        /*
+         * z-index scale:
+         *   1    — internal component stacking (e.g. sticky console header)
+         *   5    — decorative overlays (e.g. lease card stamps)
+         *   900  — loading overlay (covers page, yields to modals)
+         *   1000 — all modals (every overlay that blocks interaction)
+         */
+
         /* Base styles */
         * {
             box-sizing: border-box;
@@ -69,7 +77,7 @@
             background: #ffffff;
             padding: 22px 24px 18px;
             border-bottom: 1px solid #e5e7eb;
-            border-radius: 12px 12px 0 0;
+            border-radius: 10px 10px 0 0;
             z-index: 1;
             display: flex;
             align-items: center;
@@ -305,9 +313,7 @@
         .console-filter-active .console-lease-group {
             display: none;
         }
-        .console-filter-active .console-lease-group.console-group-visible {
-            display: block;
-        }
+        /* .console-group-visible removed — JS uses inline style.display directly */
 
         /* Reminder modal */
         .modal-overlay {
@@ -317,7 +323,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 9999;
+            z-index: 1000;
         }
         .modal-container {
             background: #fff;
@@ -439,31 +445,6 @@
             font-size: 14px;
             color: #6b7280;
             margin: 0;
-        }
-
-        /* Card component */
-        .card {
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 6px 16px rgba(0, 0, 0, 0.06);
-            padding: 28px 32px;
-            margin-bottom: 24px;
-        }
-        .card-header {
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .card-header h3 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1a1a2e;
-            margin: 0 0 4px 0;
-        }
-        .card-header p {
-            color: #6b7280;
-            margin: 0;
-            font-size: 14px;
         }
 
         /* Upload form card */
@@ -1202,6 +1183,8 @@
         .reminder-item.urgency-warning {
             background: #fef6e0;
             border-color: #f59e0b;
+            border-left-width: 5px;
+            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(245, 158, 11, 0.15);
         }
         .reminder-item.urgency-warning .reminder-label { color: #d97706; }
         .reminder-item.urgency-warning .reminder-days { color: #b45309; }
@@ -1215,6 +1198,9 @@
         .reminder-item.urgency-urgent {
             background: #fff1e6;
             border-color: #ea580c;
+            border-left-width: 5px;
+            box-shadow: 0 2px 4px rgba(234, 88, 12, 0.25), 0 4px 12px rgba(234, 88, 12, 0.15);
+            animation: pulse-urgent 2.5s ease-in-out infinite;
         }
         .reminder-item.urgency-urgent .reminder-label { color: #ea580c; }
         .reminder-item.urgency-urgent .reminder-days { color: #c2410c; }
@@ -1228,6 +1214,10 @@
         .reminder-item.urgency-critical {
             background: #fee8e8;
             border-color: #dc2626;
+            border-left-width: 6px;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3), 0 4px 14px rgba(220, 38, 38, 0.2);
+            animation: shake-critical 0.6s ease-in-out infinite;
+            animation-delay: 3s;
         }
         .reminder-item.urgency-critical .reminder-label { color: #dc2626; }
         .reminder-item.urgency-critical .reminder-days { color: #b91c1c; }
@@ -1237,7 +1227,7 @@
             color: #fff;
         }
 
-        /* Urgency: Lifecycle (Terminated/Expired) - AMBER to match dashboard ribbons */
+        /* Urgency: Lifecycle (Terminated/Expired) - AMBER to match dashboard stamps */
         .reminder-item.urgency-lifecycle {
             background: #fde68a;
             border-color: #f59e0b;
@@ -1249,10 +1239,6 @@
             background: #f59e0b;
             color: #fff;
         }
-
-        /* ========================================
-           URGENCY ESCALATION - Visual Enhancements
-           ======================================== */
 
         /* Keyframes: Slow pulse for urgent level - VIBRANT */
         @keyframes pulse-urgent {
@@ -1273,37 +1259,11 @@
             80% { transform: translateX(1px); }
         }
 
-        /* Enhanced Warning: stronger border + vibrant warning shadow */
-        .reminder-item.urgency-warning {
-            border-left-width: 5px;
-            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(245, 158, 11, 0.15);
-        }
-
-        /* Enhanced Urgent: vibrant orange + slow pulse animation */
-        .reminder-item.urgency-urgent {
-            border-left-width: 5px;
-            background: #fff1e6;
-            box-shadow: 0 2px 4px rgba(234, 88, 12, 0.25), 0 4px 12px rgba(234, 88, 12, 0.15);
-            animation: pulse-urgent 2.5s ease-in-out infinite;
-        }
-
-        /* Enhanced Critical: vibrant red + subtle shake animation */
-        .reminder-item.urgency-critical {
-            border-left-width: 6px;
-            background: #fee8e8;
-            border-color: #dc2626;
-            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3), 0 4px 14px rgba(220, 38, 38, 0.2);
-            animation: shake-critical 0.6s ease-in-out infinite;
-            animation-delay: 3s;
-        }
-
         /* Urgency icon styling */
         .urgency-icon {
             margin-right: 3px;
             font-style: normal;
         }
-
-        /* ======================================== */
 
         /* View section button group */
         .view-actions {
@@ -1796,21 +1756,19 @@
             pointer-events: none;
             z-index: 5;
         }
-        .lease-card-stamp.terminated {
-            color: #dc2626;
+        .lease-card-stamp.terminated,
+        .lease-card-stamp.expired {
+            color: #f59e0b;
             transform: translate(-50%, -50%) rotate(-20deg);
             background: none;
-            border: 3px solid #dc2626;
+            border: 3px solid #f59e0b;
             padding: 7px 18px;
             font-size: 23px;
         }
-        .lease-card-stamp.expired {
-            color: #dc2626;
-            transform: translate(-50%, -50%) rotate(-20deg);
-            background: none;
-            border: 3px solid #dc2626;
-            padding: 7px 18px;
-            font-size: 23px;
+        .lease-card-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
 
         /* ========================================
@@ -2067,6 +2025,36 @@
         }
         .ai-preview-pdf:hover {
             background: #1d4ed8;
+        }
+
+        /* ---- Saved AI Preview (read-only modal) ---- */
+        .saved-ai-field {
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .saved-ai-field:last-child {
+            border-bottom: none;
+        }
+        .saved-ai-label {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .ai-status {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .ai-modified {
+            color: #d97706;
+        }
+        .ai-evidence-wrapper {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #555;
+        }
+        .ai-meta {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
         }
 
         /* ========================================
@@ -2408,196 +2396,6 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.06);
             border-color: #d1d5db;
         }
-        .lease-card.active {
-            border-color: #3b82f6;
-            background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);
-        }
-        .lease-card.active:hover {
-            transform: none;
-        }
-        .lease-card-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 12px;
-        }
-        .lease-card-name {
-            font-weight: 600;
-            font-size: 16px;
-            color: #1a1a2e;
-            line-height: 1.3;
-        }
-        .lease-card-badge {
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: #3b82f6;
-            color: #fff;
-            flex-shrink: 0;
-            margin-left: 12px;
-        }
-        .lease-card-details {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: auto;
-        }
-        .lease-card-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-        }
-        .lease-card-label {
-            color: #6b7280;
-        }
-        .lease-card-value {
-            color: #374151;
-            font-weight: 500;
-        }
-        .lease-card-value.rent {
-            color: #059669;
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-        .lease-card-footer {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #f3f4f6;
-            font-size: 11px;
-            color: #9ca3af;
-        }
-
-        /* Lease Card Urgency Levels - Subtle Visual Cues */
-        .lease-card.urgency-none {
-            /* Default - no changes */
-        }
-        .lease-card.urgency-info {
-            border-left: 3px solid #93c5fd;
-            background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
-        }
-        .lease-card.urgency-warning {
-            border-left: 3px solid #fbbf24;
-            background: linear-gradient(135deg, #fffbeb 0%, #fff 100%);
-        }
-        .lease-card.urgency-urgent {
-            border-left: 3px solid #f87171;
-            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
-        }
-        .lease-card.urgency-critical {
-            border-left: 4px solid #dc2626;
-            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
-            box-shadow: 0 2px 4px rgba(220, 38, 38, 0.1), 0 6px 16px rgba(0, 0, 0, 0.08);
-        }
-        /* Override active card styling when urgency present */
-        .lease-card.active.urgency-info {
-            border-color: #3b82f6;
-            border-left: 3px solid #93c5fd;
-        }
-        .lease-card.active.urgency-warning {
-            border-color: #f59e0b;
-            border-left: 3px solid #fbbf24;
-        }
-        .lease-card.active.urgency-urgent {
-            border-color: #ef4444;
-            border-left: 3px solid #f87171;
-        }
-        .lease-card.active.urgency-critical {
-            border-color: #dc2626;
-            border-left: 4px solid #dc2626;
-        }
-
-        /* Dashboard-First View */
-        .dashboard-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 28px;
-        }
-
-        /* Global Alerts Ticker */
-        .global-alerts {
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-            margin-bottom: 24px;
-            overflow: hidden;
-        }
-        .global-alerts-header {
-            font-size: 13px;
-            font-weight: 600;
-            color: #374151;
-            padding: 12px 16px 8px;
-            border-bottom: 1px solid #f3f4f6;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-        .alert-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 16px;
-            text-decoration: none;
-            color: inherit;
-            border-bottom: 1px solid #f9fafb;
-            transition: background 0.1s;
-        }
-        .alert-row:last-child {
-            border-bottom: none;
-        }
-        .alert-row:hover {
-            background: #f9fafb;
-        }
-        .alert-urgency {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-            padding: 3px 8px;
-            border-radius: 4px;
-            flex-shrink: 0;
-        }
-        .alert-urgency.critical {
-            background: #fef2f2;
-            color: #dc2626;
-        }
-        .alert-urgency.urgent {
-            background: #fff7ed;
-            color: #ea580c;
-        }
-        .alert-urgency.warning {
-            background: #fffbeb;
-            color: #d97706;
-        }
-        .alert-urgency.info {
-            background: #eff6ff;
-            color: #2563eb;
-        }
-        .alert-content {
-            flex: 1;
-            min-width: 0;
-        }
-        .alert-message {
-            display: block;
-            font-size: 14px;
-            font-weight: 500;
-            color: #1f2937;
-        }
-        .alert-type {
-            font-size: 11px;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-            margin-right: 6px;
-        }
-        .alert-action {
-            display: block;
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 2px;
-        }
-
         /* Landlord Group Headers */
         .landlord-group {
             margin-bottom: 32px;
@@ -2729,14 +2527,14 @@
         }
 
         /* Compact reply / note boxes — global */
-        textarea.reply-box {
-            height: 26px !important;
-            min-height: 26px !important;
-            max-height: 52px !important;
-            line-height: 18px !important;
-            font-size: 13px !important;
-            padding: 3px 6px !important;
-            box-sizing: border-box !important;
+        .thread-actions textarea.reply-box {
+            height: 26px;
+            min-height: 26px;
+            max-height: 52px;
+            line-height: 18px;
+            font-size: 13px;
+            padding: 3px 6px;
+            box-sizing: border-box;
             resize: vertical;
             overflow-y: auto;
         }
@@ -2806,12 +2604,6 @@
         .attention-empty {
             font-size: 0.85em; color: #d1d5db;
             margin: 0; padding: 4px 0;
-        }
-
-        .lease-card-subtitle {
-            font-size: 12px;
-            color: #9ca3af;
-            margin-bottom: 4px;
         }
 
         /* Two-column body: tenant (left) + expiry (right) */
@@ -3002,6 +2794,12 @@
                 flex-wrap: wrap;
             }
         }
+
+        /* Monthly summary table + history view rules (moved from inline) */
+        #monthly-summary tr[onclick]:hover { background: #f9fafb; }
+        @keyframes gentle-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
+        #submissionsModalBody.history-view form,
+        #submissionsModalBody.history-view details { display: none !important; }
     </style>
 </head>
 <body>
@@ -3059,7 +2857,7 @@
                     <div class="lease-card-stamp expired">EXPIRED</div>
                     {% endif %}
                     <div class="lease-card-content">
-                        <div class="lease-card-title {% if lease._is_terminated %}terminated{% elif lease._is_expired %}expired{% endif %}">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
+                        <div class="lease-card-title">{{ lcv.lease_nickname or 'Untitled Lease' }}</div>
                         <div class="lease-card-body">
                             <div class="lease-card-body-left">
                                 <div class="lease-card-tenant-name">{{ lcv.lessee_name or '—' }}</div>
@@ -3863,12 +3661,6 @@
                 <button type="button" onclick="document.getElementById('monthly-summary-collapsed').style.display='none';document.getElementById('monthly-summary-full').style.display='block';" style="background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 4px; font-size: 0.9em; cursor: pointer;">Show monthly summary</button>
             </div>
             <div id="monthly-summary-full" style="display: none;">
-            <style>
-                #monthly-summary tr[onclick]:hover { background: #f9fafb; }
-                @keyframes gentle-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
-                #submissionsModalBody.history-view form,
-                #submissionsModalBody.history-view details { display: none !important; }
-            </style>
             {% set ns_total = namespace(count=0) %}
             {% for ms in monthly_summary %}{% set ns_total.count = ns_total.count + ms.count %}{% endfor %}
             {% if ns_total.count > 0 %}
@@ -3965,7 +3757,7 @@
             <p style="color: #aaa; font-size: 0.75em; margin: 6px 0 0 0;">Submissions indicate that the tenant has uploaded documents. They do not confirm payment, accuracy, or landlord approval.</p>
             {% if payment_confirmations %}
             <div style="margin-top: 10px; text-align: center;">
-                <a href="javascript:void(0)" onclick="openFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer;">View full submission history</a>
+                <button type="button" onclick="openFullHistoryModal()" style="color: #2563eb; font-size: 0.85em; text-decoration: none; cursor: pointer; background: none; border: none; padding: 0;">View full submission history</button>
             </div>
             {% endif %}
             {% else %}
@@ -4472,6 +4264,9 @@
                 <button type="submit">Save Changes</button>
                 <button type="button" class="btn-ai" onclick="aiPrefill(this)">🤖 Auto-fill using AI</button>
                 <button type="button" class="btn-ai" id="btnReturnPreview" style="display:none;" onclick="reopenAiPreview()">Return to AI Preview</button>
+                {% if lease_data.ai_extraction %}
+                <button type="button" class="btn-secondary" onclick="openSavedAiPreview()">View AI Preview</button>
+                {% endif %}
                 <a href="{% if lease_data.status == 'active' %}/?lease_id={{ lease_data.id }}{% else %}/{% endif %}" class="btn-cancel">Cancel</a>
             </div>
             <div class="ai-message"></div>
@@ -4658,6 +4453,92 @@ const LEASE_FIELDS = Object.keys(FIELD_LABELS);
 
 // Money fields (for display formatting in preview)
 const MONEY_PREVIEW_FIELDS = ['monthly_rent', 'security_deposit'];
+
+// Normalize raw AI extraction fields into form-field-keyed object.
+// Remaps AI JSON keys to form field names, unwraps .value/.evidence
+// from structured fields, normalizes flat fields (lease_nickname).
+// Returns: { formFieldName: { value: string|null, evidence: string|null }, ... }
+function normalizeAiFields(raw) {
+    var KEY_MAP = {
+        'lease_nickname':           'lease_nickname',
+        'lessor_name':              'lessor_name',
+        'lessee_name':              'lessee_name',
+        'start_date':               'lease_start_date',
+        'end_date':                 'lease_end_date',
+        'monthly_rent':             'monthly_rent',
+        'security_deposit':         'security_deposit',
+        'rent_due_day':             'rent_due_day',
+        'lock_in_duration_months':  'lock_in_months',
+        'rent_escalation_percent':  'rent_escalation_percent'
+    };
+    var result = {};
+    for (var aiKey in KEY_MAP) {
+        var entry = raw[aiKey];
+        if (entry === undefined || entry === null) continue;
+        var formKey = KEY_MAP[aiKey];
+        if (typeof entry === 'object') {
+            var v = (entry.value !== null && entry.value !== undefined)
+                  ? String(entry.value).trim() : null;
+            if (v === '') v = null;
+            result[formKey] = { value: v, evidence: entry.evidence || null };
+        } else {
+            var v = String(entry).trim();
+            result[formKey] = { value: v || null, evidence: null };
+        }
+    }
+    return result;
+}
+
+// ---- Saved AI Preview (read-only) ----
+
+function openSavedAiPreview() {
+    if (!SAVED_AI_EXTRACTION) return;
+    var normalized = normalizeAiFields(SAVED_AI_EXTRACTION);
+    var modal     = document.getElementById("savedAiPreviewModal");
+    var meta      = document.getElementById("savedAiPreviewMeta");
+    var container = document.getElementById("savedAiPreviewFields");
+    container.innerHTML = "";
+    if (SAVED_AI_RAN_AT) {
+        var d = new Date(SAVED_AI_RAN_AT);
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var day = d.getDate();
+        var mon = months[d.getMonth()];
+        var year = d.getFullYear();
+        var h = d.getHours();
+        var m = d.getMinutes();
+        var timeStr = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+        meta.innerHTML = '<div class="ai-meta">AI run on ' + day + ' ' + mon + ' ' + year + ' at ' + timeStr + '</div>';
+    }
+    Object.entries(normalized).forEach(function([field, data]) {
+        var currentField = document.querySelector('[name="' + field + '"]');
+        var currentValue = currentField ? currentField.value : "(not found)";
+        var isSame = String(data.value || "") === String(currentValue || "");
+        var evidenceHtml = data.evidence
+            ? '<details class="ai-evidence-wrapper"><summary>View Evidence</summary><div class="ai-evidence">' + data.evidence + '</div></details>'
+            : '';
+        var block = document.createElement("div");
+        block.className = "saved-ai-field";
+        if (isSame) {
+            block.innerHTML =
+                '<div class="saved-ai-label">' + (FIELD_LABELS[field] || field) + '</div>' +
+                '<div><strong>Value:</strong> ' + (data.value != null ? data.value : "-") + '</div>' +
+                evidenceHtml;
+        } else {
+            block.innerHTML =
+                '<div class="saved-ai-label">' + (FIELD_LABELS[field] || field) + '</div>' +
+                '<div><strong>AI Suggested:</strong> ' + (data.value != null ? data.value : "-") + '</div>' +
+                '<div><strong>Current Value:</strong> ' + (currentValue != null && currentValue !== "" ? currentValue : "-") + '</div>' +
+                '<div class="ai-status ai-modified">Modified after AI</div>' +
+                evidenceHtml;
+        }
+        container.appendChild(block);
+    });
+    modal.classList.add("visible");
+}
+
+function closeSavedAiPreview() {
+    document.getElementById("savedAiPreviewModal").classList.remove("visible");
+}
 
 // AI suggestions waiting for user review (not yet applied to form)
 let pendingSuggestions = {};
@@ -5195,16 +5076,6 @@ function aiPrefill(button) {
                 unifiedChangesMap = {};
             }
 
-            // Helper to safely extract value from AI response field
-            // Returns null if value is missing, null, undefined, or empty string
-            const getValue = (field) => {
-                if (field && typeof field === 'object' && field.value !== null && field.value !== undefined) {
-                    const strVal = String(field.value).trim();
-                    return strVal === '' ? null : strVal;
-                }
-                return null;
-            };
-
             // Helper to normalize values for comparison (handles type coercion)
             const normalizeValue = (val) => {
                 if (val === null || val === undefined) return '';
@@ -5260,24 +5131,15 @@ function aiPrefill(button) {
                 return true;
             };
 
-            // Update ALL fields - AI always applies regardless of prior state
-            // lease_nickname has direct value (not nested)
-            if (d.lease_nickname) {
-                updateField('lease_nickname', d.lease_nickname);
+            // Normalize AI keys → form field names, then feed each to updateField
+            var normalized = normalizeAiFields(d);
+            for (var formKey in normalized) {
+                updateField(formKey, normalized[formKey].value);
+            }
+            if (normalized.lease_nickname && normalized.lease_nickname.value) {
                 const aiHint = form.querySelector('#nickname-ai-hint');
                 if (aiHint) aiHint.classList.add('visible');
             }
-
-            // Other fields have nested structure {value, page, evidence}
-            updateField('lessor_name', getValue(d.lessor_name));
-            updateField('lessee_name', getValue(d.lessee_name));
-            updateField('lease_start_date', getValue(d.start_date));
-            updateField('lease_end_date', getValue(d.end_date));
-            updateField('monthly_rent', getValue(d.monthly_rent));
-            updateField('security_deposit', getValue(d.security_deposit));
-            updateField('rent_due_day', getValue(d.rent_due_day));
-            updateField('lock_in_months', getValue(d.lock_in_duration_months));
-            updateField('rent_escalation_percent', getValue(d.rent_escalation_percent));
 
             // Compute "not filled" fields and reason (needed by preview modal and apply logic)
             aiNotFilledFields = [];
@@ -5537,10 +5399,30 @@ let unifiedChangesMap = {};
     </div>
 </div>
 
+<!-- Saved AI Extraction (read-only) Modal -->
+<div class="text-modal-overlay" id="savedAiPreviewModal">
+    <div class="text-modal">
+        <div class="text-modal-header">
+            <h3>Saved AI Extraction</h3>
+            <button type="button" class="text-modal-close" onclick="closeSavedAiPreview()">Close</button>
+        </div>
+        <div class="text-modal-body">
+            <div id="savedAiPreviewMeta"></div>
+            <div id="savedAiPreviewFields"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 function closeMissingDocumentModal() {
     document.getElementById('missingDocumentModal').classList.remove('visible');
 }
+</script>
+
+<!-- Saved AI extraction data (for read-only preview) -->
+<script>
+const SAVED_AI_EXTRACTION = {{ lease_data.ai_extraction.fields | tojson if lease_data and lease_data.ai_extraction else "null" }};
+const SAVED_AI_RAN_AT = {{ lease_data.ai_extraction.ran_at | tojson if lease_data and lease_data.ai_extraction else "null" }};
 </script>
 
 <script>
@@ -5862,6 +5744,17 @@ document.addEventListener('keydown', function(e) {
         if (submissionsModal && submissionsModal.classList.contains('visible')) {
             closeSubmissionsModal();
         }
+        const savedAiModal = document.getElementById('savedAiPreviewModal');
+        if (savedAiModal && savedAiModal.classList.contains('visible')) {
+            closeSavedAiPreview();
+        }
+    }
+});
+
+// Close saved AI preview modal when clicking outside
+document.getElementById('savedAiPreviewModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeSavedAiPreview();
     }
 });
 
